@@ -8,38 +8,81 @@
 
 class Fishpig_Wordpress_Block_Feed_Post_Comment extends Fishpig_Wordpress_Block_Feed_Abstract
 {
-	public function __construct()
-	{
-		$this->setTemplate('wordpress/feed/post/comment.phtml');
-	}
-
 	/**
-	 * Retrieve a collection of posts for the feed
+	 * Generate the entries and add them to the RSS feed
 	 *
-	 * @return Fishpig_Wordpress_Model_Mysql4_Post_Comment_Collection
+	 * @param Zend_Feed_Writer_Feed $feed
+	 * @return $this
 	 */
-	public function getComments()
+	protected function _addEntriesToFeed($feed)
 	{
-		return $this->getPost()->getResource()->getPostComments($this->getPost());
+		$comments = Mage::getResourceModel('wordpress/post_comment_collection')
+			->addCommentApprovedFilter()
+			->addOrderByDate('desc');
+		
+		$this->_prepareItemCollection($comments);
+		
+		foreach($comments as $comment) {
+			$entry = $feed->createEntry();
+
+			if ($this->getSource()) {
+				$entry->setTitle(
+					Mage::helper('wordpress')->__('By: %s', $comment->getCommentAuthor())
+				);
+			}
+			else {
+				$entry->setTitle(
+					Mage::helper('wordpress')->__('Comment on %s by %s', $comment->getPost()->getPostTitle(), $comment->getCommentAuthor())
+				);
+			}
+
+			if (strpos($comment->getUrl(), 'http') !== false) {
+				$entry->setLink($comment->getUrl());
+			}
+
+			if ($comment->getCommentAuthorEmail() && $comment->getCommentAuthor()) {
+				$entry->addAuthor(array(
+					'name' => $comment->getCommentAuthor(),
+					'email' => $comment->getCommentAuthorEmail(),
+				));
+			}
+
+			$entry->setDescription($comment->getCommentContent());
+			$entry->setDateModified(strtotime($comment->getData('comment_date_gmt')));
+			
+			$feed->addEntry($entry);
+		}
+
+		return $this;
 	}
 	
 	/**
-	 * Retrieve the post
+	 * Apply the source filter if available
 	 *
-	 * @return Fishpig_Wordpress_Model_Post
+	 * @param $collection
+	 * @return $this
 	 */
-	public function getPost()
+	protected function _prepareItemCollection($collection)
 	{
-		return Mage::registry('wordpress_post');
+		if ($this->getSource()) {
+			$collection->addPostIdFilter($this->getSource()->getId());
+		}
+		
+		return parent::_prepareItemCollection($collection);
 	}
 
 	/**
-	 * Retrieve the feed URL
+	 * Retrieve the feed title
 	 *
 	 * @return string
 	 */
-	public function getFeedUrl()
+	public function getTitle()
 	{
-		return rtrim($this->getPost()->getUrl(), '/') . '/feed/';
+		if ($this->getSource()) {
+			return sprintf('Comments on: %s', $this->getSource()->getPostTitle());
+		}
+		else {
+			return sprintf('Comments for %s', parent::getTitle());
+		}
 	}
 }

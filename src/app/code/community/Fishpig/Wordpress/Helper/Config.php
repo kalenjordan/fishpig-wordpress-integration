@@ -24,17 +24,6 @@ class Fishpig_Wordpress_Helper_Config extends Fishpig_Wordpress_Helper_Abstract
 	}
 	
 	/**
-	 * Retrieve a value from the config as a flag (bool)
-	 *
-	 * @param string $key
-	 * @return bool
-	 */
-	public function getConfigFlag($key)
-	{
-		return $this->getConfigValue($key) !== '0';
-	}
-	
-	/**
 	 * Retrieves all config values for the extension
 	 *
 	 * @return array
@@ -44,16 +33,16 @@ class Fishpig_Wordpress_Helper_Config extends Fishpig_Wordpress_Helper_Abstract
 		if (!$this->_isCached('config')) {
 			$this->_cache('config', array());
 			
-			$store 		= Mage::app()->getStore();
+			$store = Mage::app()->getStore();
 			$request	= Mage::app()->getRequest();
-			
+
 			if ($store->getCode() == 'admin') {
-				$websiteCode 	= $request->getParam('website', false);
-				$storeCode 		= $request->getParam('store', false);
-				$storeId			= intval($storeCode)==$storeCode;
-				$options 			= array('default' => 0);
+				$websiteCode = $request->getParam('website', false);
+				$storeCode = $request->getParam('store', false);
+				$storeId = intval($storeCode)==$storeCode;
+				$options = array('default' => 0);
 				
-				if ($storeCode) 	{
+				if ($storeCode) {
 					$store = Mage::getModel('core/store')->load($storeCode, ($storeId ? null : 'code'));
 					
 					if ($store->getId()) {
@@ -89,7 +78,7 @@ class Fishpig_Wordpress_Helper_Config extends Fishpig_Wordpress_Helper_Abstract
 
 			$resource = Mage::getSingleton('core/resource');
 			$db 			= $resource->getConnection('core_read');
-			$config		= array();
+			$config	= array();
 			
 			foreach($options as $scope => $scopeId) {
 				$select = $db->select()
@@ -107,22 +96,14 @@ class Fishpig_Wordpress_Helper_Config extends Fishpig_Wordpress_Helper_Abstract
 				}
 			}
 
-			$defaults = array(
-				Mage::getConfig()->getNode()->default->wordpress,
-				Mage::getConfig()->getNode()->default->wordpress_blog,
-				Mage::getConfig()->getNode()->default->wordpress_extend,
-			);
-
-			foreach($defaults as $sections) {
-				foreach($sections as $section => $groups) {
-					foreach($groups as $group => $fields) {
-						foreach($fields as $field => $value) {
-							$path = $section . '/'. $group . '/' . $field;
-							
-							if (!isset($config[$path])) {
-								$config[$path] = $value;
-							}
-						}
+			$groups = (array)Mage::getConfig()->getNode()->default->wordpress;
+				
+			foreach($groups as $group => $fields) {
+				foreach($fields as $field => $value) {
+					$path = 'wordpress/'. $group . '/' . $field;
+					
+					if (!isset($config[$path])) {
+						$config[$path] = (string)$value;
 					}
 				}
 			}

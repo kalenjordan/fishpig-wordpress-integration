@@ -6,8 +6,15 @@
  * @author      Ben Tideswell <help@fishpig.co.uk>
  */
 
-class Fishpig_Wordpress_Block_Post_Meta extends Mage_Core_Block_Template
+class Fishpig_Wordpress_Block_Post_Meta extends Fishpig_Wordpress_Block_Abstract
 {
+	/**
+	 * Retrieve the category string (Posted in %s, %s and %s)
+	 *
+	 * @param Fishpig_Wordpress_Model_Post_Abstract $object,
+	 * @param array $params = array
+	 * @return string
+	 */
 	public function getCategoryString(Fishpig_Wordpress_Model_Post_Abstract $object, array $params = array())
 	{
 		$html = array();
@@ -21,6 +28,13 @@ class Fishpig_Wordpress_Block_Post_Meta extends Mage_Core_Block_Template
 		return implode(', ', $html);
 	}
 	
+	/**
+	 * Retrieve the tag string (tagged with %s, %s and %s)
+	 *
+	 * @param Fishpig_Wordpress_Model_Post_Abstract $object,
+	 * @param array $params = array
+	 * @return string
+	 */
 	public function getTagString(Fishpig_Wordpress_Model_Post_Abstract $object, array $params = array())
 	{
 		$html = array();
@@ -34,6 +48,13 @@ class Fishpig_Wordpress_Block_Post_Meta extends Mage_Core_Block_Template
 		return implode(', ', $html);
 	}
 	
+	/**
+	 * Retrieve the author string
+	 *
+	 * @param Fishpig_Wordpress_Model_Post_Abstract $object,
+	 * @param array $params = array
+	 * @return string
+	 */
 	public function getAuthorString(Fishpig_Wordpress_Model_Post_Abstract $object, array $params = array())
 	{
 		$author = $object->getAuthor();
@@ -42,11 +63,25 @@ class Fishpig_Wordpress_Block_Post_Meta extends Mage_Core_Block_Template
 	}
 	
 	
+	/**
+	 * Determine whether the object has tags
+	 *
+	 * @param Fishpig_Wordpress_Model_Post_Abstract $object,
+	 * @return bool
+	 */
 	public function hasTags(Fishpig_Wordpress_Model_Post_Abstract $object)
 	{
 		return count($object->getTags()) > 0;
 	}
 	
+	/**
+	 * Generate an anchor tag
+	 *
+	 * @param string $href
+	 * @param string $anchor
+	 * @param array $params = array
+	 * @return string
+	 */
 	protected function _generateAnchor($href, $anchor, array $params = array())
 	{
 		foreach($params as $param => $value) {
@@ -65,10 +100,6 @@ class Fishpig_Wordpress_Block_Post_Meta extends Mage_Core_Block_Template
 	 */
 	public function canDisplayPreviousNextLinks()
 	{
-		if (!$this->hasDisplayPreviousNextLinks()) {
-			$this->setDisplayPreviousNextLinks(Mage::getStoreConfigFlag('wordpress_blog/posts/display_previous_next'));
-		}
-		
 		return $this->_getData('display_previous_next_links');
 	}
 }

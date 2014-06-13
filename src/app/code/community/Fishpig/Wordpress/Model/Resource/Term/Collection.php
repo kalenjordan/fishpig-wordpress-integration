@@ -41,6 +41,15 @@ class Fishpig_Wordpress_Model_Resource_Term_Collection extends Fishpig_Wordpress
 		return $this;
 	}
 	
+	public function setOrderByName($dir = 'ASC')
+	{
+		$this->getSelect()
+			->reset(Zend_Db_Select::ORDER)
+			->order('main_table.name ' . $dir);
+			
+		return $this;
+	}
+	
 	/**
 	 * Add a slug filter to the collection
 	 *
@@ -162,5 +171,15 @@ class Fishpig_Wordpress_Model_Resource_Term_Collection extends Fishpig_Wordpress
 		$this->getSelect()->where('taxonomy.taxonomy ' . $op . ' (?)', $this->getNewEmptyItem()->getDefaultTermTaxonomyTypes());
 
 		return $this;
+	}
+	
+	/**
+	 * Determine whether the term has objects associated with it
+	 *
+	 * @return $this
+	 */
+	public function addHasObjectsFilter()
+	{
+		return $this->addFieldToFilter('count', array('gt' => 0));
 	}
 }

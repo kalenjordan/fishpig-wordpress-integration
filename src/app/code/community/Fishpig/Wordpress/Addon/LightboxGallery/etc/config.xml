@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<config>
+	<modules>
+		<Fishpig_Wordpress_Addon_LightboxGallery>
+			<version>1.0.0.0</version>
+		</Fishpig_Wordpress_Addon_LightboxGallery>
+	</modules>
+	<global>
+		<helpers>
+			<wp_addon_lightboxgallery>
+				<class>Fishpig_Wordpress_Addon_LightboxGallery_Helper</class>
+			</wp_addon_lightboxgallery>
+		</helpers>
+	</global>
+	<frontend>
+		<events>
+			<controller_front_send_response_before>
+				<observers>
+					<wp_addon_lightboxgallery>
+						<type>singleton</type>
+						<class>Fishpig_Wordpress_Addon_LightboxGallery_Helper_Data</class>
+						<method>addLightboxGalleryIncludesObserver</method>
+					</wp_addon_lightboxgallery>
+				</observers>
+			</controller_front_send_response_before>
+		</events>
+	</frontend>
+</config>

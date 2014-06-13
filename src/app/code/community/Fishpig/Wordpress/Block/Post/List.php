@@ -9,41 +9,11 @@
 class Fishpig_Wordpress_Block_Post_List extends Fishpig_Wordpress_Block_Post_Abstract
 {
 	/**
-	 * Renderer block for posts
-	 *
-	 * @var Fishpig_Wordpress_Block_Post_List_Renderer
-	 */
-	protected $_renderBlock = null;
-	
-	/**
-	 * Renderer and template information for post types
-	 *
-	 * @var array
-	 */
-	protected $_postTypeTemplates = array(
-		'post' => 'wordpress/post/list/renderer/default.phtml',
-	);
-
-	/**
 	 * Cache for post collection
 	 *
 	 * @var Fishpig_Wordpress_Model_Resource_Post_Collection
 	 */
 	protected $_postCollection = null;
-
-	/**
-	 * Block wrapper (category, tag, author etc)
-	 *
-	 * @var Fishpig_Wordpress_Block_Post_List_Abstract
-	 */
-	protected $_wrapperBlock = null;
-	
-	/**
-	 * Cache for the pager block
-	 *
-	 * @var Fishpig_Wordpress_Block_Post_List_Pager
-	 */
-	protected $_pagerBlock = null;
 	
 	/**
 	 * Returns the collection of posts
@@ -62,11 +32,15 @@ class Fishpig_Wordpress_Block_Post_List extends Fishpig_Wordpress_Block_Post_Abs
 	 */
 	protected function _getPostCollection()
 	{
-		if (is_null($this->_postCollection)) {
-			if (is_null($this->getWrapperBlock()) === false) {
-				$this->_postCollection = $this->getWrapperBlock()->getPostCollection();
+		if (is_null($this->_postCollection) && $this->getWrapperBlock()) {
+			$this->_postCollection = $this->getWrapperBlock()->getPostCollection();
+			
+			if ($this->_postCollection) {
+				if ($this->getPostType()) {
+					$this->_postCollection->addPostTypeFilter($this->getPostType());
+				}
 				
-				if ($this->getPagerBlock() && $this->_postCollection) {
+				if ($this->getPagerBlock()) {
 					$this->getPagerBlock()->setCollection($this->_postCollection);
 				}
 			}
@@ -84,19 +58,7 @@ class Fishpig_Wordpress_Block_Post_List extends Fishpig_Wordpress_Block_Post_Abs
 	 */
 	public function setWrapperBlock(Fishpig_Wordpress_Block_Post_List_Wrapper_Abstract $wrapper)
 	{
-		$this->_wrapperBlock = $wrapper;
-
-		return $this;
-	}
-	
-	/**
-	 * Returns the block wrapper object
-	 *
-	 * @return Fishpig_Wordpress_Block_Post_List_Wrapper_Abstract
-	 */
-	public function getWrapperBlock()
-	{
-		return $this->_wrapperBlock;
+		return $this->setData('wrapper_block', $wrapper);
 	}
 	
 	/**
@@ -107,21 +69,17 @@ class Fishpig_Wordpress_Block_Post_List extends Fishpig_Wordpress_Block_Post_Abs
 	 */
 	public function getPagerBlock()
 	{
-		if (is_null($this->_pagerBlock)) {
-			$pagerBlock = $this->getChild('pager');
+		if (!$this->hasPagerBlock()) {
+			$this->setPagerBlock(false);
 			
-			if (!$pagerBlock) {
-				$pagerBlock = $this->getLayout()->createBlock('wordpress/post_list_pager', 'pager' . rand(1111, 9999));
-				
-				$this->setChild('pager', $pagerBlock);
+			if ($pager = $this->getChild('pager')) {
+				$this->setPagerBlock(
+					$pager->setPostListBlock($this)
+				);
 			}
-
-			$pagerBlock->setPostListBlock($this);
-
-			$this->_pagerBlock = $pagerBlock;
 		}
 		
-		return $this->_pagerBlock;
+		return $this->_getData('pager_block');
 	}
 	
 	/**
@@ -142,22 +100,60 @@ class Fishpig_Wordpress_Block_Post_List extends Fishpig_Wordpress_Block_Post_Abs
 	 */
 	public function getPostRenderer(Fishpig_Wordpress_Model_Post_Abstract $post)
 	{
-		$type = $post->getPostType();
-		
-		if (is_null($this->_renderBlock)) {
-			$this->_renderBlock = $this->getLayout()->createBlock('wordpress/post_list_renderer');
-		}
-		
-		$this->_renderBlock->setPost($post);
-		
-		if ($post->getPostListTemplate()) {
-			return $this->_renderBlock->setTemplate($post->getPostListTemplate());
+		if (!$this->hasPostRenderer()) {
+			$this->setPostRenderer(
+				$this->getLayout()->createBlock('wordpress/post_list_renderer')
+					->setParentBlock($this)
+					->setExcerptSize($this->getExcerptSize())
+			);
 		}
 
-		if (isset($this->_postTypeTemplates[$type])) {
-//			return $this->_renderBlock->setTemplate($this->_postTypeTemplates[$type]);
+		return $this->_getData('post_renderer')
+			->setPost($post)
+			->setTemplate(
+				$post->getPostListTemplate() ? $post->getPostListTemplate() : $this->getPostRendererTemplate()
+			);
+	}
+	
+	/**
+	 * Get the post renderer template
+	 *
+	 * @return string
+	 */
+	public function getPostRendererTemplate()
+	{
+		if (!$this->hasPostRendererTemplate()) {
+			$this->setPostRendererTemplate('wordpress/post/list/renderer/default.phtml');
 		}
 		
-		return $this->_renderBlock->setTemplate('wordpress/post/list/renderer/default.phtml');
+		return $this->_getData('post_renderer_template');
+	}
+
+	/**
+	 * Ensure that the post list handle is set (adds the pager)
+	 *
+	 * @return $this
+	 */
+	protected function _prepareLayout()
+	{
+		$this->getLayout()
+			->getUpdate()
+			->addHandle('wordpress_post_list');
+
+		return parent::_prepareLayout();
+	}
+	
+	/**
+	 * Ensure a valid template is set
+	 *
+	 * @return $this
+	 */
+	protected function _beforeToHtml()
+	{
+		if (!$this->getTemplate()) {
+			$this->setTemplate('wordpress/post/list.phtml');
+		}
+		
+		return parent::_beforeToHtml();
 	}
 }

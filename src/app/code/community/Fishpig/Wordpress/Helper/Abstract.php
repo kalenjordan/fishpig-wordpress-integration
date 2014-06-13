@@ -34,7 +34,7 @@ class Fishpig_Wordpress_Helper_Abstract extends Mage_Core_Helper_Abstract
 		
 		if ($this->isFullyIntegrated()) {
 			$params = array(
-				'_direct' 	=> $this->getBlogRoute() . '/' . ltrim($extra, '/'), 
+				'_direct' 	=> ltrim($this->getBlogRoute() . '/' . ltrim($extra, '/'), '/'),
 				'_secure' 	=> false,
 				'_nosid' 	=> true,
 				'_store'		=> Mage::app()->getStore()->getId(),
@@ -66,7 +66,15 @@ class Fishpig_Wordpress_Helper_Abstract extends Mage_Core_Helper_Abstract
 	public function getBlogRoute()
 	{
 		if ($this->isFullyIntegrated()) {
-			return trim(strtolower($this->getConfigValue('wordpress/integration/route')), '/');
+			if (!$this->_isCached('blog_route')) {
+				$transport = new Varien_Object(array('blog_route' => trim(strtolower($this->getConfigValue('wordpress/integration/route')), '/')));
+			
+				Mage::dispatchEvent('wordpress_get_blog_route', array('transport' => $transport));
+			
+				$this->_cache('blog_route', $transport->getBlogRoute());
+			}
+			
+			return $this->_cached('blog_route');
 		}
 		
 		return null;
@@ -81,18 +89,6 @@ class Fishpig_Wordpress_Helper_Abstract extends Mage_Core_Helper_Abstract
 	public function isFullyIntegrated()
 	{
 		return $this->getConfigValue('wordpress/integration/full');
-	}
-	
-	/**
-	 * Gets a Wordpress option based on it's option name
-	 *
-	 * @param string $optionName
-	 * @param mixed $default = null
-	 * @return string
-	 */
-	public function getCachedWpOption($optionName, $default = null)
-	{
-		return $this->getWpOption($optionName, $default);
 	}
 	
 	/**
@@ -134,15 +130,8 @@ class Fishpig_Wordpress_Helper_Abstract extends Mage_Core_Helper_Abstract
 			$message = $message->__toString();
 		}
 		
-		if ($this->isFishPig() && $serious === true) {
-			echo sprintf('<div style="border:2px solid maroon;padding:20px;"><p>%s</p></div>', $message);
-			exit;
-		}
-		
-		if ($this->getConfigValue('wordpress/debug/log_enabled')) {
-			if ($message = trim($message)) {
-				return Mage::log($message, null, 'wordpress.log', true);
-			}
+		if ($message = trim($message)) {
+			return Mage::log($message, null, 'wordpress.log', true);
 		}
 	}
 	
@@ -158,14 +147,14 @@ class Fishpig_Wordpress_Helper_Abstract extends Mage_Core_Helper_Abstract
 	}
 
 	/**
-	 * Retrieve a cached config value as a bool
+	 * Retrieve a value from the config as a flag (bool)
 	 *
 	 * @param string $key
 	 * @return bool
-	 */	
+	 */
 	public function getConfigFlag($key)
 	{
-		return Mage::helper('wordpress/config')->getConfigFlag($key);
+		return $this->getConfigValue($key) !== '0';
 	}
 
 	/**
@@ -178,7 +167,7 @@ class Fishpig_Wordpress_Helper_Abstract extends Mage_Core_Helper_Abstract
 		if (!$this->_isCached('default_store')) {	
 			$connection = Mage::getSingleton('core/resource')->getConnection('core_read');
 			$select = $connection->select()
-				->from(array('_store_table' => Mage::helper('wordpress/db')->getTableName('core/store')), 'store_id')
+				->from(array('_store_table' => Mage::helper('wordpress/database')->getTableName('core/store')), 'store_id')
 				->where('_store_table.store_id > ?', 0)
 				->where('_store_table.code != ?', 'admin')
 				->limit(1)
@@ -246,16 +235,26 @@ class Fishpig_Wordpress_Helper_Abstract extends Mage_Core_Helper_Abstract
 	}
 	
 	/**
-	 * Determines whether the FishPig server variable is set
-	 * If true, debugging mode is activated
-	 * Currently the only change in debugging mode is that all WP errors
-	 * are printed to the screen and execution is halted instead
-	 * of the message just being logged
+	 * Retrieve a plugin option
 	 *
-	 * @return bool
+	 * @param string $plugin
+	 * @param string $key = null
+	 * @return mixed
 	 */
-	public function isFishPig()
+	public function getPluginOption($plugin, $key = null)
 	{
-		return isset($_SERVER['FISHPIG']) || isset($_SERVER['fishpig']);
+		$options = $this->getWpOption($plugin);
+		
+		if (($data = @unserialize($options)) !== false) {
+			if (is_null($key)) {
+				return $data;
+			}
+
+			return isset($data[$key])
+				? $data[$key]
+				: null;
+		}
+		
+		return $options;
 	}
 }

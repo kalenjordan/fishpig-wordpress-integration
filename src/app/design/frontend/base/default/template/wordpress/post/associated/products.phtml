@@ -11,7 +11,7 @@
 	<div class="block block-related">
 		<?php if ($title = $this->getTitle()): ?>
 			<div class="block-title">
-				<strong><?php echo $title ?></strong>
+				<strong><span><?php echo $title ?></span></strong>
 			</div>
 		<?php endif; ?>
 		<div class="block-content">
@@ -29,6 +29,6 @@
 				<?php endforeach; ?>
 			</ol>
 		</div>
-		<script type="text/javascript">decorateList('block-blog-related', 'none-recursive')</script>
+<script type="text/javascript">decorateList('block-blog-related', 'none-recursive');</script>
 	</div>
 <?php endif; ?>

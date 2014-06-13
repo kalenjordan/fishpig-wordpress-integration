@@ -29,11 +29,48 @@ class Fishpig_Wordpress_Model_Resource_Post_Collection extends Fishpig_Wordpress
 	 */
 	protected $_joinedCustomFields = array();
 	
+	/**
+	 * Set the resource
+	 *
+	 * @return void
+	 */
 	public function _construct()
 	{
 		$this->_init('wordpress/post');
 	}
+	
+	/**
+	 * Add the permalink data before loading the collection
+	 *
+	 * @return $this
+	 */
+	protected function _beforeLoad()
+	{
+		parent::_beforeLoad();
 
+		if (in_array('post', $this->_postTypes)) {
+			if ($sql = $this->getResource()->getPermalinkSqlColumn()) {
+				$this->getSelect()->columns(array('permalink' => $sql));
+			}
+		}
+	
+		return $this;		
+	}
+	
+	/**
+	 * Ensure that is any pages are in the collection, they are correctly cast
+	 *
+	 * @return $this
+	 */
+	protected function _afterLoad()
+	{
+		parent::_afterLoad();
+
+		$this->getResource()->preparePosts($this->_items);		
+
+		return $this;
+	}
+	
 	/**
 	 * Filters the collection by an array of post ID's and category ID's
 	 * When filtering by a category ID, all posts from that category will be returned
@@ -137,8 +174,8 @@ class Fishpig_Wordpress_Model_Resource_Post_Collection extends Fishpig_Wordpress
 	 */
 	public function joinCustomField($field, $joinType = 'join')
 	{
-		if (trim($join) === '') {
-			$join = 'join';
+		if (trim($joinType) === '') {
+			$joinType = 'join';
 		}
 
 		if (!isset($this->_joinedCustomFields[$field])) {
@@ -148,7 +185,7 @@ class Fishpig_Wordpress_Model_Resource_Post_Collection extends Fishpig_Wordpress
 			
 			$this->getSelect()
 				->$joinType(
-					array($alias => $this->getTable('postmeta')),
+					array($alias => $this->getTable('wordpress/post_meta')),
 					"`{$alias}`.`post_id` = `main_table`.`ID` AND " . $this->getConnection()->quoteInto("`{$alias}`.`meta_key`=?", $field),
 					array($field => 'meta_value')
 				);
@@ -170,6 +207,33 @@ class Fishpig_Wordpress_Model_Resource_Post_Collection extends Fishpig_Wordpress
 	{
 		$this->joinCustomField($field, $join)
 			->getSelect()->where(sprintf('`_custom_field_%s`.`meta_value` %s (?)', $field, $operator), $value);
+		
+		return $this;
+	}
+	
+	/**
+	 * Add sticky posts to the filter
+	 *
+	 * @param bool $isSticky = true
+	 * @return $this
+	 */
+	public function addStickyPostsToCollection()
+	{
+		if (($sticky = trim(Mage::helper('wordpress')->getWpOption('sticky_posts'))) !== '') {
+			$stickyIds = unserialize($sticky);
+			
+			if (count($stickyIds) > 0) {
+				$select = Mage::helper('wordpress/database')->getReadAdapter()
+					->select()
+					->from($this->getTable('wordpress/post'), new Zend_Db_Expr(1))
+					->where('main_table.ID IN (?)', $stickyIds)
+					->limit(1);
+				
+				$this->getSelect()
+					->columns(array('is_sticky' => '(' . $select . ')'))
+					->order('is_sticky DESC');
+			}
+		}
 		
 		return $this;
 	}

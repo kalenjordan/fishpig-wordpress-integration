@@ -9,9 +9,9 @@
 class Fishpig_Wordpress_Helper_System extends Fishpig_Wordpress_Helper_Abstract
 {
 	/**
-	 * Retrieve a collection of integration results
+	 * Generate and retrieve the integration test results
 	 *
-	 * @return Varien_Data_Collection
+	 * @return array
 	 */
 	public function getIntegrationTestResults()
 	{
@@ -19,348 +19,430 @@ class Fishpig_Wordpress_Helper_System extends Fishpig_Wordpress_Helper_Abstract
 			return false;
 		}
 
-		if (!$this->_isCached('integration_results')) {
-			$results = new Varien_Data_Collection();
+		$results = array();
+
+		Mage::dispatchEvent('wordpress_integration_tests_before', array('results' => $results, 'helper' => $this));
 		
-			$results->addItem($this->_isConnected());
-			
+		if ($this->applyTest('_validateDatabaseConnection', $results)) {
 			if (Mage::helper('wordpress')->isFullyIntegrated()) {
-				$validWpUrls = $this->_hasValidWordPressUrls();
-				
-				$results->addItem($validWpUrls);
-				
-				if ($validWpUrls->getIsError()) {
-					$results->addItem($this->_createErrorTestResultObject($this->__('Blog Route')));	
-				}
-				else {
-					$results->addItem($this->_hasValidBlogRoute());
-				}
-				
-				if (($result = $this->_hasIndexDotPhpUrl()) !== false) {
-					$results->addItem($result);
-				}
-
-				$results->addItem($this->_hasValidWordPressPath());
+				$this->applyTest('_validateHomeUrl', $results);
+				$this->applyTest('_validatePath', $results);
+				$this->applyTest('_validateTheme', $results);
+				$this->applyTest('_validatePlugins', $results, array());
+				$this->applyTest('_validatePermalinks', $results);
+				$this->applyTest('_validateHtaccess', $results);
+				$this->applyTest('_upsellCustomerSynchronisation', $results);
+				$this->applyTest('_upsellReCaptcha', $results);
 			}
-			
-			if (($result = $this->_getUpsellTestResult()) !== false) {
-				$results->addItem($result);
-			}
-
-			Mage::dispatchEvent('wordpress_integration_test_results_after', array('results' => $results));
-
-			$this->_cache('integration_results', $results);
 		}
-		
-		return $this->_cached('integration_results');
-	}
 
+		Mage::dispatchEvent('wordpress_integration_tests_after', array('results' => $results, 'helper' => $this));
+
+		return $results;
+	}
+	
 	/**
-	 * Determine whether the integration tests encountered errors
+	 * Check whether the database is connected
 	 *
-	 * @return bool
+	 * @return void
 	 */
-	public function integrationHasErrors()
+	protected function _validateDatabaseConnection()
 	{
-		if ($results = $this->getIntegrationTestResults()) {
-			foreach($results as $result) {
-				if ($result->getIsError() && $result->getResult() === 'error-msg') {
-					return true;
-				}
-			}
-			
-			return false;			
+		if (!Mage::helper('wordpress/database')->isConnected()) {
+			throw Fishpig_Wordpress_Exception::error(
+				'Database Error',
+				$this->__('Error establishing a database connection')
+				. '. You can confirm your WordPress database details by opening the file wp-config.php, which is in your WordPress root directory.'
+			);
 		}
 		
 		return true;
 	}
 	
 	/**
-	 * Determine whether the database is connected
-	 *
-	 * @return Varien_Object
-	 */
-	protected function _isConnected()
-	{
-		$title = 'Database';
-
-		if (!Mage::helper('wordpress/database')->isConnected()) {
-			$response = $this->__("Ensure the WordPress database details entered below match the details in wp-config.php"); 
-			
-			return $this->_createTestResultObject($title, $response, false);
-		}
-		
-		return $this->_createTestResultObject($title);
-	}
-	
-	/**
-	  * Determine whether the database is queryable
-	  *
-	  * @return Varien_Object
-	  */
-	protected function _isQueryable()
-	{
-		$title = 'Database Query';
-
-		if (!Mage::helper('wordpress/database')->isQueryable()) {
-			if ($prefix = Mage::helper('wordpress/database')->getTablePrefix()) {
-				$response = $this->__("Unable to query the WordPress database using the table prefix '%s'. Ensure the details entered below match those in wp-config.php", $prefix); 
-			}
-			else {
-				$response = $this->__("Unable to query the WordPress database using no table prefix. Ensure the details entered below match those in wp-config.php");
-			}
-
-			return $this->_createTestResultObject($title, $response, false);
-		}
-		
-		return $this->_createTestResultObject($title);
-	}
-	
-	/**
-	 * Determine whether the Wordpress URL's are valid
-	 *
-	 * @return Varien_Object
-	 */
-	protected function _hasValidWordPressUrls()
-	{
-		$title = "WordPress Install Location";
-		
-		if (Mage::helper('wordpress/database')->isQueryable()) {
-			$helper = Mage::helper('wordpress');
-			
-			$blogUrl 	 = rtrim(str_replace('/index.php', '', $helper->getUrl()), '/');
-			$installUrl = rtrim(str_replace('/index.php', '', $helper->getWpOption('siteurl')), '/');
-			
-			if (!$installUrl) {
-				$response = $this->__("Unable to determine your WordPress install URL");
-	
-				return $this->_createTestResultObject($title, $response, false);			
-			}
-			else if ($blogUrl == $installUrl) {
-				$response = $this->__('Your WordPress install URL matches your integrated blog URL (Magento URL + Blog Route). Either change your blog route below (you will need to update the WordPress option Site Address) or move WordPress to a different sub-directory.');
-	
-				return $this->_createTestResultObject($title, $response, false);		
-			}
-		}
-		else {
-			return $this->_createTestResultObject($title, '--', false);	
-		}
-		
-		return $this->_createTestResultObject($title);	
-	}
-	
-	/**
 	 * Determine whether the blog route is valid
 	 *
 	 * @return Varien_Object
 	 */
-	protected function _hasValidBlogRoute()
+	protected function _validateHomeUrl()
 	{
-		$title = "Blog Route";	
+		$helper = Mage::helper('wordpress');
+
+		$site = rtrim($helper->getWpOption('siteurl'), '/');
+		$home = rtrim($helper->getWpOption('home'), '/');
+		$mage = rtrim(($helper->getUrl()), '/');
+
+		if ($site === $mage) {
+			throw Fishpig_Wordpress_Exception::error('Site URL', 
+				$this->__('Your integrated blog URL (%s) matches your WordPress Site URL. Either change your blog route below or move WordPress to a different sub-directory.', $mage)
+			);
+		}
+		else if ($mage !== $home) {
+			throw Fishpig_Wordpress_Exception::warning('Home URL', 
+				stripslashes(Mage::helper('wordpress')->__('Your WordPress home URL %s is invalid.  Please fix the <a href=\"%s\">home option</a>.', $home,  'http://codex.wordpress.org/Changing_The_Site_URL" target="_blank'))
+				. $this->__(' Change to %s', $mage)
+			);
+		}
+
+
+		if ($helper->getBlogRoute() && is_dir(Mage::getBaseDir() . DS . $helper->getBlogRoute())) {
+			throw Fishpig_Wordpress_Exception::warning('Home URL', 
+				stripslashes(Mage::helper('wordpress')->__("A '%s' directory exists in your Magento root that will stop your integrated WordPress from displaying. You must delete this before your blog will display.", $helper->getBlogRoute()))
+			);
+		}
 		
-		if (Mage::helper('wordpress/database')->isQueryable()) {
-			$helper = Mage::helper('wordpress');
-
-			$wpBlogUrl 	  = rtrim($helper->getWpOption('home'), '/');
-			$mageBlogUrl = rtrim(($helper->getUrl()), '/');			
-			$response = false;
-			
-			if (trim($helper->getBlogRoute(), '/') === '') {
-				$response = $this->__('Your blog route cannot be empty.');
-			}
-			else if (strpos($helper->getBlogRoute(), '/') !== false) {
-				$response = $this->__('Your blog route cannot contain a slash character.');
-			}
-			else if ($wpBlogUrl != $mageBlogUrl) {
-				$response = $this->__("Your blog route does match the Site Address in WordPress. Go to the General Settings section of your WordPress Admin and set the 'Site address (URL)' field to '%s'", $mageBlogUrl);
-			}
-			
-			if ($response !== false) {
-				return $this->_createTestResultObject($title, $response, false);
-			}
-		}
-		else {
-			return $this->_createTestResultObject($title, '--', false);		
-		}
-
-		return $this->_createTestResultObject($title);		
+		return true;
 	}
 	
 	/**
-	 * Determine whether the blog route is valid
+	 * Ensure the correct WordPress theme is installed
 	 *
-	 * @return Varien_Object
+	 * @return bool
 	 */
-	protected function _hasIndexDotPhpUrl()
+	protected function _validateTheme()
 	{
-		$title = "Web Server Rewrites";	
-		
-		if (Mage::helper('wordpress/database')->isQueryable()) {
-			$helper = Mage::helper('wordpress');
-
-			if (strpos($helper->getUrl(), 'index.php') !== false) {
-				$response = $this->__("To improve your blog's SEO, enable Web Server Rewrites in Magento. This will remove the index.php from your blog URL's");
-	
-				return $this->_createTestResultObject($title, $response, 'warning-msg');
-			}
-		}
-
-		return false;
-	}
-	
-	protected function _getUpsellTestResult()
-	{
-		$packages = array(
-			'multisite' => array(
-				'package' => 'Fishpig_Wordpress_Addon_Multisite',
-				'title' => 'WordPress Multisite Integration',
-				'description' => 'Upgrade WordPress Integration to %s to have a blog per store.',
-				'url' => 'http://fishpig.co.uk/wordpress-multisite-integration.html',
-			),
-			'disqus' => array(
-				'package' => 'Fishpig_Wordpress_Addon_Disqus',
-				'title' => 'Disqus Comments',
-				'description' => 'Increase your blog with %s and let your customers comment with their Facebook and Twitter accounts.',
-				'url' => 'http://fishpig.co.uk/wordpress-integration-disqus-comments.html',
-			),
-		);
-		
-		if (Mage::app()->isSingleStoreMode()) {
-			unset($packages['multisite']);
+		if (Mage::helper('wordpress')->getWpOption('template') !== 'twentytwelve') {
+			throw Fishpig_Wordpress_Exception::error('Themes', 
+				stripslashes(Mage::helper('wordpress')->__('You are using a non-supported WordPress theme that has not been tested. To improve your integration, enable the Twenty Twelve WordPress theme.'))
+			);
 		}
 		
-		$modules = (array)Mage::getConfig()->getNode('modules')->children();
-
-		foreach($packages as $package) {
-			if (!isset($modules[$package['package']])) {
-				$msg = sprintf($package['description'], sprintf('<a href="%s?ref=mag" target="_blank">%s</a>', $package['url'], $package['title']));
-				
-				return $this->_createTestResultObject('Improve your blog', $msg, 'warning-msg');
-			}
-		}
-		
-		return false;
+		return true;
 	}
 	
 	/**
 	 * Determine whether the WordPress path is valid
 	 *
-	 * @return Varien_Object
+	 * @return void
 	 */
-	protected function _hasValidWordPressPath()
+	protected function _validatePath()
 	{
-		$title = "WordPress Path";	
-		
 		if (Mage::helper('wordpress')->getWordPressPath() === false) {
-
-			$response = $this->__('The WordPress path field is empty. Please enter the sub-directory that WordPress is installed in.');
-		}
-		else if (!$this->hasValidWordPressPath()) {
-			$response = $this->__('Unable to find a WordPress installation using the path you entered below.');
-		}
-		else {
-			return $this->_createTestResultObject($title);	
+			throw Fishpig_Wordpress_Exception::error(
+				'WordPress ' . $this->__('Path'), 
+				$this->__("Unable to find a WordPress installation at '%s'", Mage::helper('wordpress')->getRawWordPressPath())
+			);
 		}
 		
-		return $this->_createTestResultObject($title, $response, false);
-	}
-	
-	public function hasValidWordPressPath()
-	{
-		$path = Mage::helper('wordpress')->getWordPressPath();
-		
-		if ($path !== false) {
-			return $path && is_dir($path) && is_file(rtrim($path, '/\\') . DS . 'wp-config.php');
-		}
-		
-		return false;
-	}
-
-	/**
-	 * Create a test result object
-	 *
-	 * @param string $title
-	 * @param string $response = ': )'
-	 * @param mixed $result = true
-	 * @return Varien_Object
-	 */
-	protected function _createTestResultObject($title, $response = ': )', $result = true)
-	{
-		$resultClass = $result;
-		
-		$isError = ($result !== true);
-
-		if ($result === true) {
-			$resultClass = 'success-msg';
-		}
-		else if ($result === false) {
-			$resultClass = 'error-msg';
-		}
-		
-		return new Varien_Object(array(
-			'title' => $this->__($title), 
-			'response' => $response, 
-			'is_error' => $isError, 
-			'result' => $resultClass
-		));
-	}
-	
-	protected function _createErrorTestResultObject($title)
-	{
-		return $this->_createTestResultObject($title, '--', false);
+		return true;
 	}
 	
 	/**
-	 * Retrieve the database host
+	 * Validate the plugins/extensions
 	 *
-	 * @return string
+	 * @param Varien_Object $params
+	 * @return void
 	 */
-	protected function _getDatabaseHost()
+	protected function _validatePlugins(Varien_Object $params)
 	{
-		$helper = Mage::helper('wordpress');
-		
-		if (!$helper->isSameDatabase()) {
-			return $helper->getConfigValue('wordpress/database/host');
+		$file = Mage::getModuleDir('etc', 'Fishpig_Wordpress') . DS . 'fishpig.xml';
+
+		if (!is_file($file)) {
+			return $this;
 		}
 		
-		return '';
+		$xml = simplexml_load_file($file);
+		$results = $params->getResults();
+		
+		foreach((array)$xml->fishpig->extensions as $moduleName => $data) {
+			$this->applyTest('_validatePlugin', $results, array_merge(
+				(array)$data, 
+				array('current_version' => (string)Mage::getConfig()->getNode()->modules->$moduleName->version)
+			));
+		}
+		
+		$params->setResults($results);
+		
+		return $this;
 	}
 	
 	/**
-	 * Retrieve the database name
+	 * Validate a single plugin
 	 *
-	 * @return string
+	 * @param Varien_Object $params
+	 * @return void
 	 */
-	protected function _getDatabaseName()
+	protected function _validatePlugin(Varien_Object $params)
 	{
-		$helper = Mage::helper('wordpress');
+		if ($params->getCurrentVersion() && version_compare($params->getNewVersion(), $params->getCurrentVersion(), '>')) {
+			throw Fishpig_Wordpress_Exception::warning($params->getName(), $this->__('You have version %s installed. Update to %s.', 
+				$params->getCurrentVersion(), 
+				sprintf('<a href="%s" target="_blank">%s</a>', $params->getUrl(), $params->getNewVersion())
+			));
+		}
 		
-		if (!$helper->isSameDatabase()) {
-			if ($dbname = $helper->getConfigValue('wordpress/database/dbname')) {
-				return Mage::helper('core')->decrypt($dbname);
+		if ($params->getId() && !$params->getCurrentVersion()) {
+			if (Mage::helper('wordpress')->isPluginEnabled($params->getId())) {
+				throw Fishpig_Wordpress_Exception::warning(
+					$params->getName(),
+					$this->__('Extension required for plugin to work. ') . $this->__('Install %s', sprintf('<a href="%s" target="_blank">extension</a>.', $params->getUrl()))
+				);
 			}
 		}
 		
-		return '';
+		return $this;
+	}
+
+	/**
+	 * Ensure that custom permalinks are setup
+	 *
+	 * @return $this
+	 */
+	protected function _validatePermalinks()
+	{
+		if (Mage::helper('wordpress/post')->useGuidLinks()) {
+			throw Fishpig_Wordpress_Exception::warning(
+				'Permalinks',
+				'You are using the default permalinks. To stop potential duplicate content issues, change them to something else in the WordPress Admin.'
+			);
+		}	
+		
+		return $this;
 	}
 	
 	/**
-	  * Determine whether the ACL is valid
-	  *
-	  * @return bool
-	  */
-	public function isAclValid()
+	 * Recommend Customer Synchronisation if multiple WP users exist
+	 *
+	 * @return $this
+	 */
+	protected function _upsellCustomerSynchronisation()
 	{
 		try {
-			$session = Mage::getSingleton('admin/session');
-			$resourceId = $session->getData('acl')->get("admin/system/config/wordpress")->getResourceId();
-			return $session->isAllowed($resourceId);	
+			if (count(Mage::getResourceModel('wordpress/user_collection')) > 9) {			
+				if (!Mage::helper('wordpress')->isAddonInstalled('Fishpig_Wordpress_Addon_CS')) {
+					throw Fishpig_Wordpress_Exception::warning(
+						'Single Sign-On',
+						$this->__(
+							'Synchronise your WordPress users and Magento customers with the <a href="%s" target="_blank">Customer Synchronisation</a> addon.',
+							'http://fishpig.co.uk/magento/wordpress-integration/customer-synchronisation/?utm_source=Fishpig_Wordpress&utm_medium=System%20Configuration&utm_term=Fishpig_Wordpress_Addon_CS&utm_campaign=UpSell'
+						)
+					);
+				}
+			}
 		}
-		catch (Exception $e) { }
+		catch (Fishpig_Wordpress_Exception $e) {
+			throw $e;	
+		}
+		catch (Exception $e) {
+			Mage::helper('wordpress')->log($e);
+		}
+		
+		return $this;
+	}
+	
+	/**
+	 * Recommend ReCaptcha to combat spam comments
+	 *
+	 * @return void
+	 */
+	protected function _upsellReCaptcha()
+	{
+		if (!Mage::helper('wordpress')->isAddonInstalled('Fishpig_Wordpress_Addon_ReCaptcha')) {
+			$comments = Mage::getResourceModel('wordpress/post_comment_collection')
+				->addCommentApprovedFilter('spam')
+				->load();
+			
+			if (count($comments) > 10) {
+				throw Fishpig_Wordpress_Exception::warning(
+					'ReCaptcha',
+					$this->__(
+						'Stop WordPress comment spam with <a href="%s" target="_blank">ReCaptcha</a>.',
+						'http://fishpig.co.uk/magento/wordpress-integration/recaptcha/?utm_source=Fishpig_Wordpress&utm_medium=System%20Configuration&utm_term=Fishpig_Wordpress_Addon_ReCaptcha&utm_campaign=UpSell'
+					)
+				);
+			}
+		}
+	}
+				
+	/**
+	 * Check whether the user has left a review
+	 *
+	 * @return void
+	 */
+	protected function _checkForReviews()
+	{
+		return $this;
+
+		$modules = array_keys(Mage::app()->getConfig()->getNode('modules')->asArray());
+		$fishpigModules = array();
+
+		foreach($modules as $module) {
+			if (strpos($module, 'Fishpig_Wordpress') === 0) {
+				if (is_null(Mage::getStoreConfig('wordpress/review/' . strtolower($module)))) {
+					$fishpigModules[] = $module;
+				}
+			}
+		}
+		
+		if (in_array('Fishpig_Wordpress', $fishpigModules) !== false) {
+			throw Fishpig_Wordpress_Exception::warning(
+				'Review',
+				$this->__(
+					'Do you like WordPress Integration? Help keep the extension free by <a href="%s" class="fp-review" target="_blank">leaving a review</a>.',
+					'http://fishpig.co.uk/magento/wordpress-integration/#reviews'
+				)
+			);
+		}
+		
+		shuffle($fishpigModules);
+		
+		foreach($fishpigModules as $module) {
+			$moduleUrl = (string)Mage::app()->getConfig()->getNode('modules/' . $module . '/fishpig/url');
+			$moduleName = (string)Mage::app()->getConfig()->getNode('modules/' . $module . '/fishpig/name');
+			
+			if ($moduleUrl && $moduleName) {
+				throw Fishpig_Wordpress_Exception::warning(
+					'Review',
+					$this->__(
+						'Do you like %s? Help keep the %s great by <a href="%s#reviews" class="fp-review" target="_blank">leaving a review</a>.',
+						$moduleName, $moduleName, $moduleUrl
+					)
+				);
+			}
+		}
+		
+		return $this;
+	}
+	
+	/**
+	 * Ensure the .htaccess file exists and doesn't reference the blog route
+	 *
+	 * @return $this
+	 */
+	protected function _validateHtaccess()
+	{
+		if (($path = Mage::helper('wordpress')->getWordPressPath()) !== false) {
+			$file = rtrim($path, DS) . DS . '.htaccess';
+			
+			if (!is_file($file)) {
+				throw Fishpig_Wordpress_Exception::warning(
+					'.htaccess',
+					'You do not have a WordPress .htaccess file.'
+				);
+			}
+			
+			if (is_readable($file) && ($data = @file_get_contents($file))) {
+				$blogRoute = Mage::helper('wordpress')->getBlogRoute();
+
+				if (preg_match('/\nRewriteBase \/' . preg_quote($blogRoute, '/') . '\//i', $data)) {
+					throw Fishpig_Wordpress_Exception::warning(
+						'.htaccess',
+						'Your .htaccess file references your blog route but should reference your WordPress installation directory.'
+					);
+				}
+			}
+		}
+
+		return $this;
+	}
+	
+	/**
+	 * Apply an integration test
+	 *
+	 * @param string $func
+	 * @param array $results
+	 * @param mixed $params = null
+	 * @return mixed
+	 */
+	public function applyTest($func, &$results, $params = null)
+	{
+		$funcResult = false;
+		
+		try {
+			if (is_array($params)) {
+				$params = new Varien_Object($params);
+				$params->setResults($results);
+			}
+			else {
+				$params = null;
+			}
+
+			if (is_array($func)) {
+				$funcResult = call_user_func($func, $params);
+			}
+			else {
+				$funcResult = $this->$func($params);
+			}
+			
+			if ($params) {
+				$results = $params->getResults();
+			}
+			
+			return true;
+		}
+		catch (Fishpig_Wordpress_Exception $e) {
+			switch($e->getCode()) {
+				case 1: 
+					$colour = '#00CC33';	
+					break;
+				case 2:
+					$colour = 'yellow';
+					break;
+				case 3:
+					$colour = '#FF3333';
+					break;
+				default:
+					$colour = '#444';
+			}
+			
+			$results[] = new Varien_Object(array(
+				'title' => Mage::helper('wordpress')->__($e->getMessage()),
+				'message' => $e->getLongMessage(),
+				'bg_colour' => $colour,
+			));
+		}
+		catch (Exception $e) {
+			$results[] = new Varien_Object(array(
+				'title' => Mage::helper('wordpress')->__('An unidentified error has occurred.'),
+				'message' => $e->getMessage(),
+				'bg_colour' => '#444',
+			));
+		}
+		
+		return $funcResult;
+	}
+	
+	/**
+	 * Attempt to login to WordPress
+	 *
+	 * @param string $username
+	 * @param string $password
+	 * @param string $destination
+	 * @return bool
+	 */
+	public function loginToWordPress($username, $password, $destination = null)
+	{
+		if (is_null($destination)) {
+			$destination = Mage::helper('wordpress')->getAdminUrl('index.php');
+		}
+
+		$result = $this->makeHttpPostRequest(Mage::helper('wordpress')->getBaseUrl('wp-login.php'), array(
+			'log' => $username,
+			'pwd' => $password,
+			'rememberme' => 'forever',
+			'redirect_to' => $destination,
+#			'testcookie' => 1
+		));
+
+		if ($result !== false) {
+			if (strpos($result, 'Location: ') === false) {
+				throw new Exception('WordPress Auto Login Failed: ' . substr($result, 0, strpos($result, "\r\n\r\n")));
+			}
+	
+			foreach(explode("\n", $result) as $line) {
+				if (substr(ltrim($line), 0, 1) === '<') {
+					break;
+				}
+	
+				header($line, false);
+			}
+	
+			return true;
+		}
 		
 		return false;
 	}
-	
+		
 	/**
 	 * Send a HTTP Post request
 	 *
@@ -370,25 +452,27 @@ class Fishpig_Wordpress_Helper_System extends Fishpig_Wordpress_Helper_Abstract
 	 */
 	public function makeHttpPostRequest($url, array $data = array())
 	{
-		if (version_compare(Mage::getVersion(), '1.7.0.0', '<') || Mage::getEdition() !== Mage::EDITION_COMMUNITY) {
+		if (!$this->hasValidCurlMethods()) {
 			return $this->_makeLegacyHttpPostRequest($url, $data);
 		}
-		
+
 		$curl = new Varien_Http_Adapter_Curl();
 
 		$curl->setConfig(array(
 			'verifypeer' => strpos($url, 'https://') !== false,
 			'header' => true,
-			'timeout' => 10,
+			'timeout' => 15,
+			'referrer' => Mage::helper('wordpress')->getBaseUrl('wp-login.php'),
 		));
 		
 		$curl->addOption(CURLOPT_FOLLOWLOCATION, false);
 		$curl->addOption(CURLOPT_USERAGENT, 'Mozilla/4.0 (compatible; MSIE 5.01; Windows NT 5.0)');
+		$curl->addOption(CURLOPT_REFERER, true);
 
-		$curl->write(Zend_Http_Client::POST, $url, '1.1', array(), $data);
+		$curl->write(Zend_Http_Client::POST, $url, '1.1', array('Expect:'), $data);
 
 		$response = $curl->read();
-		
+
 		if ($curl->getErrno() || $curl->getError()) {
 			throw new Exception(Mage::helper('wordpress')->__('CURL (%s): %s', $curl->getErrno(), $curl->getError()));
 		}
@@ -440,44 +524,23 @@ class Fishpig_Wordpress_Helper_System extends Fishpig_Wordpress_Helper_Abstract
 	}
 
 	/**
-	 * Attempt to login to WordPress
+	 * Retrieve the extension version
 	 *
-	 * @param string $username
-	 * @param string $password
-	 * @param string $destination
+	 * @param string $extension
+	 * @return string
+	 */
+	public function getExtensionVersion($extension = 'Fishpig_Wordpress')
+	{
+		return (string)Mage::getConfig()->getNode('modules/' . $extension . '/version');
+	}
+	
+	/**
+	 * Has valid CURL methods
+	 *
 	 * @return bool
 	 */
-	public function loginToWordPress($username, $password, $destination = null)
+	public function hasValidCurlMethods()
 	{
-		$url = Mage::helper('wordpress')->getBaseUrl('wp-login.php');
-		
-		if (is_null($destination)) {
-			$destination = $this->getUrl();
-		}
-
-		$result = $this->makeHttpPostRequest($url, array(
-			'log' => $username,
-			'pwd'	 => $password,
-			'rememberme' => 'forever',
-			'redirect_to' => $destination,
-			'testcookie' => 1
-		));
-	
-		if (strpos($result, 'Location: ') === false) {
-			$header = substr($result, 0, strpos($result, "\r\n\r\n"));
-	
-			throw new Exception('WordPress Auto Login Failed: ' . $header);
-		}
-
-		foreach(explode("\n", $result) as $line) {
-			if (substr(ltrim($line), 0, 1) !== '<') {
-				header($line, false);
-			}
-			else {
-				break;
-			}
-		}
-
-		return true;
+		return method_exists('Varien_Http_Adapter_Curl', 'addOption');
 	}
 }

@@ -9,10 +9,10 @@
 <form id="respond" method="post" action="<?php echo $this->getCommentFormAction() ?>">
 	<div class="display-none">
 		<input type="hidden" name="comment_post_ID" value="<?php echo $this->getPostId() ?>"/>
-		<input type="hidden" name="comment_parent" value="0"/>
+		<input type="hidden" name="comment_parent" id="comment_parent" value="<?php echo (int)$this->getRequest()->getParam('replytocom', 0) ?>"/>
 	</div>
 	<div class="fieldset">
-		<div class="legend"><?php echo $this->__('Comments') ?></div>
+		<div class="legend"><?php echo $this->__('Leave a Reply') ?></div>
 		<?php if ($this->customerMustLogin()): ?>	
 			<p><?php echo $this->__('Sorry, you must be logged in to post a comment.') ?></p>
 			<p><button class="button btn-login" type="button" onclick="setLocation('<?php echo $this->getLoginLink() ?>');"><span><span><?php echo $this->__('Login') ?></span></span></button></p>
@@ -46,11 +46,7 @@
 						<textarea id="comment" name="comment" rows="8" cols="45" class="required-entry"></textarea>
 					</div>
 				</li>
-				<?php if ($this->getCommentReplyNotificationEnabled()): ?>
-					<li class="control">
-						<input type="checkbox" class="checkbox" title="<?php echo $this->__('Receive Reply Notifications') ?>" value="1" id="notifications" name="extra[comment_mail_notify]"<?php if ($this->getCommentReplyNotificationOptInChecked()): ?> checked="checked"<?php endif; ?>> <label for="notifications"><?php echo $this->__('Notify me of follow-up comments via e-mail') ?></label>
-					</li>
-				<?php endif; ?>
+				<?php echo $this->getChildHtml('before_form_end') ?>
 			</ul>
 		<?php endif; ?>
 	</div>
@@ -65,9 +61,7 @@
 	</div>
 	<script type="text/javascript">
 	//<![CDATA[
-		if (typeof wpCommentForm !== 'undefined') {
-			var commentForm = new wpCommentForm('respond');
-		}
+		new fishpig.WP.Comments.Form('respond', '<?php echo $this->getPost()->getPermalink() ?>');
 	//]]>
 	</script>
 	<?php endif; ?>

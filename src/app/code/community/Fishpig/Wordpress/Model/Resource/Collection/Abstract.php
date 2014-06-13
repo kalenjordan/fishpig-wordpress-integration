@@ -125,4 +125,21 @@ abstract class Fishpig_Wordpress_Model_Resource_Collection_Abstract extends Mage
 	{
 		return 'meta_field_' . str_replace('-', '_', $field);
 	}
+
+	/**
+	 * After loading a collection, dispatch the pre-set event
+	 *
+	 * @return $this
+	 */
+	protected function _afterLoad()
+	{
+		if ($this->getFlag('after_load_event_name')) {
+			Mage::dispatchEvent($this->getFlag('after_load_event_name'), array(
+				'collection' => $this,
+				'wrapper_block' => $this->getFlag('after_load_event_block')
+			));
+		}
+
+		return parent::_afterLoad();
+	}
 }

@@ -7,6 +7,7 @@
  */
 
 class Fishpig_Wordpress_Block_Sidebar_Widget_Posts extends Fishpig_Wordpress_Block_Sidebar_Widget_Abstract
+implements Mage_Widget_Block_Interface
 {
 	/**
 	 * Cache for post collection
@@ -33,6 +34,10 @@ class Fishpig_Wordpress_Block_Sidebar_Widget_Posts extends Fishpig_Wordpress_Blo
 		parent::_beforeToHtml();
 
 		$this->setPosts($this->_getPostCollection());
+		
+		if (!$this->getTemplate()) {
+			$this->setTemplate('wordpress/sidebar/widget/posts.phtml');
+		}
 
 		return $this;
 	}
@@ -68,10 +73,16 @@ class Fishpig_Wordpress_Block_Sidebar_Widget_Posts extends Fishpig_Wordpress_Blo
 	{
 		if (is_null($this->_collection)) {
 			$collection = Mage::getResourceModel('wordpress/post_collection')
-				->addIsPublishedFilter()
 				->setOrderByPostDate()
 				->setPageSize($this->getNumber())
 				->setCurPage(1);
+				
+			if (Mage::getSingleton('customer/session')->isLoggedIn() && Mage::helper('wordpress')->isAddonInstalled('CS')) {
+				$collection->addStatusFilter(array('publish', 'private'));
+			}
+			else {
+				$collection->addStatusFilter('publish');
+			}
 	
 			if ($categoryId = $this->getCategoryId()) {
 				$collection->addCategoryIdFilter($categoryId);
@@ -81,6 +92,14 @@ class Fishpig_Wordpress_Block_Sidebar_Widget_Posts extends Fishpig_Wordpress_Blo
 				$collection->addAuthorIdFilter($authorId);
 			}
 			
+			if ($tag = $this->getTag()) {
+				$collection->addTermFilter($tag, 'post_tag', 'name');
+			}
+
+			if ($postTypes = $this->getPostType()) {
+				$collection->addPostTypeFilter(explode(',', $postTypes));
+			}
+
 			$this->_collection = $collection;
 		}
 		

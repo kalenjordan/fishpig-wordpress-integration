@@ -44,9 +44,11 @@
 								<?php if (count($children) > 0): ?>
 									<ul class="level1">
 										<?php foreach($children as $child): ?>
+											<?php if ($child->getPostCount() > 0): ?>
 											<li class="level1 item<?php if ($this->isCurrentCategory($child)): ?> active<?php endif; ?>">
-												&raquo; <a href="<?php echo $child->getUrl() ?>" title="<?php echo $child->getName() ?>" class="level1"><?php echo $child->getName() ?></a>
+												&raquo; <a href="<?php echo $child->getUrl() ?>" title="<?php echo $child->getName() ?>" class="level1"><?php echo $child->getName() ?></a><?php if ($this->getCount()): ?> (<?php echo $child->getPostCount() ?>)<?php endif; ?>
 											</li>
+											<?php endif; ?>
 										<?php endforeach; ?>
 									</ul>
 								<?php endif; ?>

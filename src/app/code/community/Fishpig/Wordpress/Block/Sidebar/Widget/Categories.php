@@ -11,18 +11,30 @@ class Fishpig_Wordpress_Block_Sidebar_Widget_Categories extends Fishpig_Wordpres
 	/**
 	 * Returns the current category collection
 	 *
-	 * @return Fishpig_Wordpress_Model_Mysql4_Category_Collection
+	 * @return Fishpig_Wordpress_Model_Resource_Term_Collection
 	 */
 	public function getCategories()
 	{
 		if (!$this->hasCategories()) {
-			$collection = Mage::getResourceModel('wordpress/post_category_collection')
-				->addParentIdFilter($this->getParentId());
+			if ($this->getTaxonomy()) {
+				$collection = Mage::getResourceModel('wordpress/term_collection')
+					->addTaxonomyFilter($this->getTaxonomy());
+
+				$collection->getSelect()
+					->reset('order')
+					->order('name ASC');
+			}
+			else {
+				$collection = Mage::getResourceModel('wordpress/post_category_collection');
+			}
+			
+			$collection->addParentIdFilter($this->getParentId())
+				->addHasObjectsFilter();
 
 			$this->setCategories($collection);
 		}
 		
-		return $this->getData('categories');
+		return $this->_getData('categories');
 	}
 	
 	/**
@@ -73,5 +85,18 @@ class Fishpig_Wordpress_Block_Sidebar_Widget_Categories extends Fishpig_Wordpres
 	public function getDefaultTitle()
 	{
 		return $this->__('Categories');
+	}
+	
+	/**
+	 * Set the posts collection
+	 *
+	 */
+	protected function _beforeToHtml()
+	{
+		if (!$this->getTemplate()) {
+			$this->setTemplate('wordpress/sidebar/widget/categories.phtml');
+		}
+
+		return parent::_beforeToHtml();
 	}
 }

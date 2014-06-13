@@ -6,27 +6,23 @@
  * @author      Ben Tideswell <help@fishpig.co.uk>
  */
 ?>
-<?php
-
-	$product = Mage::getModel('catalog/product');
-	
-	if ($this->getProductSku() && !$this->getProductId()) {
-		$this->setProductId($product->getResource()->getIdBySku($this->getProductSku()));
-	}
-	
-	$product->load($this->getProductId());
-
-	if (!$product->getId()) {
-		return;
-	}
-
-	if (!$this->getHeaderLevel()) {
-		$this->setHeaderLevel(3);
-	}
-
-?>
-<div id="product-shortcode-<?php echo $product->getId() ?>" class="product-shortcode">
-	<h<?php echo $this->getHeaderLevel() ?>><a href="<?php echo $product->getProductUrl() ?>" title="<?php echo $this->escapeHtml($product->getName()) ?>"><?php echo $this->escapeHtml($product->getName()) ?></a></h<?php echo $this->getHeaderLevel() ?>>
-	<img src="<?php echo $this->helper('catalog/image')->init($product, 'image')->constrainOnly(true)->resize(200, 200) ?>" alt="<?php echo $this->escapeHtml($product->getName()) ?>"/>
-	<p><?php echo nl2br($this->stripTags($product->getShortDescription())) ?></p>
+<?php if(count($this->getItems())): ?>
+<div class="block block-related">
+    <div class="block-content">
+        <ul class="mini-products-list">
+        <?php foreach($this->getItems() as $_item): ?>
+            <li class="item">
+                <div class="product">
+                    <a href="<?php echo $_item->getProductUrl() ?>" title="<?php echo $this->htmlEscape($_item->getName()) ?>" class="product-image"><img src="<?php echo $this->helper('catalog/image')->init($_item, 'thumbnail')->resize(50) ?>" width="50" height="50" alt="<?php echo $this->htmlEscape($_item->getName()) ?>" /></a>
+                    <div class="product-details">
+                        <p class="product-name"><a href="<?php echo $_item->getProductUrl() ?>"><?php echo $this->htmlEscape($_item->getName()) ?></a></p>
+                        <?php //echo $this->getPriceHtml($_item, true, '-related') ?>
+                        <?php if (trim($_item->getShortDescription()) !== ''): ?><p><?php echo trim($_item->getShortDescription()) ?></p><?php endif; ?>
+                    </div>
+                </div>
+            </li>
+        <?php endforeach ?>
+        </ul>
+    </div>
 </div>
+<?php endif ?>

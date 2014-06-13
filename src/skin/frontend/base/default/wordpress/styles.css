@@ -12,7 +12,7 @@
  *
  */
 .blog-search { padding: 5px; }
-input#blog-search { clear: both; margin-bottom: 6px;}
+.blog-search .input-text { margin-bottom: 4px;}
 
 /**
  * General post (view and list)
@@ -49,6 +49,7 @@ input#blog-search { clear: both; margin-bottom: 6px;}
  *
  */
 .post-list li.item { margin-bottom: 20px; }
+.post-list li.item .post-list-item { height: 1%; overflow: hidden; }
 .post-list h2 { line-height: 1em; margin-bottom: 1em; }
 
 /**
@@ -57,15 +58,19 @@ input#blog-search { clear: both; margin-bottom: 6px;}
  */
 .page-title.post-title { margin-bottom: 4px; }
 .post-view .post-meta { margin-bottom: 20px; }
-.post-view .post-skips { display: block; width: 100%; }
+.post-view .post-skips { display: block; margin-top: 20px; width: 100%; }
 .post-view .post-skips .post-skip-previous { margin-right: 10px; }
+
+.post-view .yarpp-related { margin-bottom: 20px; }
 
 /**
  * Post comments
  *
  */
 .comments-wrapper h2 { margin-bottom: 10px; }
+.comments-wrapper ul.children { margin-left: 20px; }
 .comment { height: 1%; overflow: hidden; margin-bottom: 10px; }
+.comment .comment-inner { border-bottom: 1px solid #eee; padding: 10px 0; }
 .comment .gravatar { float: left; margin: 0 10px 10px 0; }
 .comment .comment-meta { margin-bottom: 10px; }
 .comment .comment-when { display: block; text-decoration: none; }
@@ -101,7 +106,7 @@ input#blog-search { clear: both; margin-bottom: 6px;}
 
 img[class*="align"],
 img[class*="wp-image-"],
-#content .gallery .gallery-icon img {/* Add fancy borders to all WordPress-added images but not things like badges and icons and the like */
+.gallery .gallery-icon img {/* Add fancy borders to all WordPress-added images but not things like badges and icons and the like */
 	border: 1px solid #ddd;
 	padding: 6px;
 }
@@ -170,6 +175,16 @@ background: #fff;
 border-color: #ddd;
 }
 
+.wp-caption .wp-caption-text,
+.gallery-caption,
+.entry-caption {
+	font-style: italic;
+	font-size: 12px;
+	font-size: 0.857142857rem;
+	line-height: 2;
+	color: #757575;
+}
+
 div.gallery { height: 1%; overflow: hidden; }
 .gallery-columns-2 dl.gallery-item { width: 50%; }
 .gallery-columns-3 dl.gallery-item { width: 33%; }
@@ -177,9 +192,29 @@ div.gallery { height: 1%; overflow: hidden; }
 .gallery-columns-5 dl.gallery-item { width: 20%; }
 
 dl.gallery-item { float: left; }
+dl.gallery-item .gallery-icon { overflow: hidden; }
 
 .post-view ul.form-list { list-style: none outside none; }
 
+/*
+ * WP Calendar
+ */
+#wp-calendar {
+	margin: 0;
+	width: 100%;
+	padding: 5px 10px;
+}
+#wp-calendar th {
+	font-weight: bold;
+}
+#wp-calendar th,
+#wp-calendar td,
+#wp-calendar caption {
+	text-align: left;
+}
+#wp-calendar #next {
+	text-align: right;
+}
 
 /**
  * Yarpp thumbnails
@@ -228,4 +263,21 @@ dl.gallery-item { float: left; }
 .yarpp-thumbnail-default > img.yarpp-thumbnail-default-tall {
 	width: 120px;
 	max-height: none;
+}
+
+#recipress_recipe {
+	clear: both;
+}
+
+/**
+ * Product shortcode
+ */
+.std ul.mini-products-list {
+	list-style: none;
+	margin: 0;
+	padding-left: 0;
+}
+
+.std ul.mini-products-list ul.item {
+	list-style: none;
 }

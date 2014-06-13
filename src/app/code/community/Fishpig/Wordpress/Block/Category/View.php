@@ -10,52 +10,26 @@ class Fishpig_Wordpress_Block_Category_View extends Fishpig_Wordpress_Block_Post
 {
 	/**
 	 * Returns the current Wordpress category
-	 * This is just a wrapper for getCurrentCategory()
 	 *
-	 * @return Fishpig_Wordpress_Model_Post_Categpry
+	 * @return Fishpig_Wordpress_Model_Post_Category
 	 */
 	public function getCategory()
 	{
-		return $this->getCurrentCategory();
-	}
-	
-	/**
-	 * Caches and returns the current category
-	 *
-	 * @return Fishpig_Wordpress_Model_Post_Categpry
-	 */
-	public function getCurrentCategory()
-	{
-		if (!$this->hasWordpressCategory()) {
-			if ($categoryId = $this->getCategoryId()) {
-				$category = Mage::getModel('wordpress/post_category')->load($categoryId);
-				
-				if ($category->getId() == $categoryId) {
-					$this->setCategory($category);
-				}
-			}
-			else {
-				$this->setCategory(Mage::registry('wordpress_category'));
-			}
-		}
-		
-		return $this->getData('category');
+		return $this->_getData('category')
+			? $this->_getData('category')
+			: Mage::registry('wordpress_category');
 	}
 
 	/**
-	 * Retrieve the current category ID
+	 * Returns the current Wordpress category
 	 *
-	 * @return false|int
+	 * @return Fishpig_Wordpress_Model_Post_Category
 	 */
-	public function getCurrentCategoryId()
+	public function getCurrentCategory()
 	{
-		if ($category = $this->getCurrentCategory()) {
-			return $category->getId();
-		}
-		
-		return false;
+		return $this->getCategory();
 	}
-		
+	
 	/**
 	 * Generates and returns the collection of posts
 	 *

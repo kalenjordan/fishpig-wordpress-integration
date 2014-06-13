@@ -9,12 +9,25 @@
 class Fishpig_Wordpress_Helper_Post extends Fishpig_Wordpress_Helper_Abstract
 {
 	/**
-	 * Variable used for post ID's when using Guid links
+	 * Get the permalink structure as a string
 	 *
-	 * @var string
+	 * @return string
 	 */
-	protected $_postIdVar = 'p';
+	public function getPermalinkStructure()
+	{
+		$cacheKey = 'permalink_structure';
+		
+		if ($this->_isCached($cacheKey)) {
+			return $this->_cached($cacheKey);
+		}
 
+		$permalink = ltrim(str_replace('index.php/', '', ltrim($this->getWpOption('permalink_structure'), ' -/')), '/');
+
+		$this->_cache($cacheKey, $permalink);
+		
+		return $permalink;
+	}
+	
 	/**
 	 * Returns TRUE is ?p=id links are being used
 	 *
@@ -22,62 +35,48 @@ class Fishpig_Wordpress_Helper_Post extends Fishpig_Wordpress_Helper_Abstract
 	 */
 	public function useGuidLinks()
 	{
-		return !trim($this->getWpOption('permalink_structure'), '/ -');
-	}
-	
-	/**
-	 * Returns the permalink structure stored in the WP database
-	 *
-	 * @return string
-	 */
-	protected function _getPermalinkStructure()
-	{
-		if (!$this->useGuidLinks()) {
-			$structure = trim($this->getWpOption('permalink_structure'), ' /');
-
-			if (Mage::helper('wordpress')->isWordpressMU()) {
-				if (strpos($structure, 'blog/') === 0) {
-					$structure = substr($structure, 5);
-				}
-			}
-			
-			return $structure;
-		}
-		
-		return false;
+		return !$this->getPermalinkStructure();
 	}
 	
 	/**
 	 * Retrieve the permalink structure in array format
-	 * Each different section is separated
 	 *
-	 * @return array
+	 * @return false|array
 	 */
-	protected function _getExplodedPermalinkStructure()
+	public function getExplodedPermalinkStructure()
 	{
+		$cacheKey = 'permalink_structure_exploded';
+		
+		if ($this->_isCached($cacheKey)) {
+			return $this->_cached($cacheKey);
+		}
+		
 		if ($this->useGuidLinks()) {
+			$this->_cache($cacheKey, array());
+			
 			return array();
 		}
-		else {
-			$structure = $this->_getPermalinkStructure();
-			$parts = preg_split("/(\/|-)/", $structure, -1, PREG_SPLIT_DELIM_CAPTURE);
-			$structure = array();
+		
+		$structure = $this->getPermalinkStructure();
+		$parts = preg_split("/(\/|-)/", $structure, -1, PREG_SPLIT_DELIM_CAPTURE);
+		$structure = array();
 
-			foreach($parts as $part) {
-				if ($result = preg_split("/(%[a-zA-Z0-9_]{1,}%)/", $part, -1, PREG_SPLIT_DELIM_CAPTURE)) {
-					$results = array_filter(array_unique($result));
+		foreach($parts as $part) {
+			if ($result = preg_split("/(%[a-zA-Z0-9_]{1,}%)/", $part, -1, PREG_SPLIT_DELIM_CAPTURE)) {
+				$results = array_filter(array_unique($result));
 
-					foreach($results as $result) {
-						array_push($structure, $result);
-					}
-				}
-				else {
-					$structure[] = $part;
+				foreach($results as $result) {
+					array_push($structure, $result);
 				}
 			}
-
-			return $structure;
+			else {
+				$structure[] = $part;
+			}
 		}
+
+		$this->_cache($cacheKey, $structure);
+		
+		return $structure;
 	}
 	
 	/**
@@ -90,7 +89,12 @@ class Fishpig_Wordpress_Helper_Post extends Fishpig_Wordpress_Helper_Abstract
 		$routerHelper = Mage::helper('wordpress/router');
 		
 		if ($structure = $this->_getExplodedPermalinkStructure()) {
+			$lastPiece = $structure[count($structure)-1];
 
+			if ($lastPiece === '/') {
+				array_pop($structure);
+			}
+			
 			foreach($structure as $i => $part) {
 				if (preg_match('/^\%[a-zA-Z0-9_-]{1,}\%$/', $part)) {
 					$part = trim($part, '%');
@@ -120,7 +124,7 @@ class Fishpig_Wordpress_Helper_Post extends Fishpig_Wordpress_Helper_Abstract
 						$part = $routerHelper->getPermalinkStringRegex();
 					}
 					else if ($part === 'category') {
-						$part = $routerHelper->getPermalinkStringRegex();
+						$part = $routerHelper->getPermalinkStringRegex('\/');
 					}
 					else if ($part === 'author') {
 						$part = $routerHelper->getPermalinkStringRegex();
@@ -150,8 +154,6 @@ class Fishpig_Wordpress_Helper_Post extends Fishpig_Wordpress_Helper_Abstract
 		return false;
 	}
 
-
-	
 	/**
 	 * Retrieve an array of the 'tokens' from the permalink structure
 	 * A token is part of the structure that relates to dynamic post informat
@@ -189,7 +191,7 @@ class Fishpig_Wordpress_Helper_Post extends Fishpig_Wordpress_Helper_Abstract
 		if ($uri === 'index.php') {
 			return false;
 		}
-		
+
 		if ($pattern = $this->_getPermalinkPattern()) {
 			$results = array();
 
@@ -232,7 +234,7 @@ class Fishpig_Wordpress_Helper_Post extends Fishpig_Wordpress_Helper_Abstract
 	 */
 	protected function _getTokenValueArray($uri)
 	{
-		if (($tokens = $this->_getPermalinkTokens()) && ($values = $this->isPostUri($uri, true))) {
+		if (($tokens = $this->_getPermalinkTokens()) && ($values = (array)$this->isPostUri($uri, true))) {
 			if (count($tokens) == count($values)) {
 				$loadValues = array();
 				
@@ -245,196 +247,6 @@ class Fishpig_Wordpress_Helper_Post extends Fishpig_Wordpress_Helper_Abstract
 		}
 		
 		return false;
-	}
-	
-	/**
-	 * Loads a post model based on the URI (array)
-	 *
-	 * @param string|array $explodedUri
-	 * @return FIshpig_Wordpress_Model_Post
-	 */	
-	public function loadByPermalink($uri)
-	{
-		if ($this->useGuidLinks()) {
-			return Mage::getModel('wordpress/post')->load($this->getPostId());
-		}
-
-		if ($loadTokens = $this->_getTokenValueArray($uri)) {
-			$posts 	= Mage::getResourceModel('wordpress/post_collection')->addIsPublishedFilter();
-			$date 	= array();
-			$time 	= array();
-			
-			foreach($loadTokens as $token => $value) {
-				if ($token === 'year') {
-					$date[0]	= $value;
-				}
-				else if ($token === 'monthnum') {
-					$date[1] 	= $value;
-				}
-				else if ($token === 'day') {
-					$date[2] 	= $value;
-				}
-				else if ($token === 'hour') {
-					$time[0] 	= $value;
-				}
-				else if ($token === 'minute') {
-					$time[1] 	= $value;
-				}
-				else if ($token === 'second') {
-					$time[2] 	= $value;
-				}
-				else if ($token === 'post_id') {
-					$posts->addFieldToFilter('ID', $value);
-				}
-				else if ($token === 'postname') {
-					$posts->addFieldToFilter('post_name', strtolower(urlencode($value)));
-				}
-				else if ($token === 'category') {
-					$posts->addCategorySlugFilter($value);
-				}
-				else if ($token === 'author') {
-
-				}
-				else {
-					Mage::dispatchEvent('wordpress_permalink_segment_unknown_load', array('collection' => $posts, 'segment' => $token, 'value' => $value));
-				}
-			}
-
-			if (($dateStr = $this->_craftDateString($date, $time)) !== false) {
-				$posts->addPostDateFilter($dateStr);
-			}
-
-			$posts->setCurPage(1)->setPageSize(1)->load();
-
-			if (count($posts) == 1) {
-				return $posts->getFirstItem();
-			}
-		}
-
-		return false;
-	}	
-
-    /**
-     * return the  permalink based on permalink structure
-     * which is defined in WP Admin
-     *
-     * @param Fishpig_Wordpress_Model_Post
-     * @return string
-     */
-	public function getPermalink(Fishpig_Wordpress_Model_Post $post)
-	{
-		if ($this->useGuidLinks()) {
-			return $this->getUrl('?p='.$post->getId());
-		}
-		else {
-			$structure = $this->_getExplodedPermalinkStructure();
-
-			if (count($structure) > 0) {
-				$url = array();
-
-				foreach($structure as $part) {
-					if (preg_match('/^\%[a-zA-Z0-9_]{1,}\%$/', $part)) {
-						$part = trim($part, '%');
-						
-						if ($part === 'year') {
-							$url[] = $post->getPostDate('Y');
-						}
-						else if ($part === 'monthnum') {
-							$url[] = $post->getPostDate('m');
-						}
-						else if ($part === 'day') {
-							$url[] = $post->getPostDate('d');
-						}
-						else if ($part === 'hour') {
-							$url[] = $post->getPostDate('H');
-						}
-						else if ($part === 'minute') {
-							$url[] = $post->getPostDate('i');
-						}
-						else if ($part === 'second') {
-							$url[] = $post->getPostDate('s');
-						}
-						else if ($part === 'post_id') {
-							$url[] = $post->getId();
-						}
-						else if ($part === 'postname') {
-							$url[] = urldecode($post->getPostName());
-						}
-						else if ($part === 'category') {
-							$url[] 	= $this->_getPermalinkCategoryPortion($post);
-						}
-						else if ($part === 'author') {
-
-						}
-						else {
-							$response = new Varien_Object(array('value' => false));
-
-							Mage::dispatchEvent('wordpress_permalink_segment_unknown_getpermalink', array('response' => $response, 'post' => $post, 'segment' => $part));
-							
-							if ($response->getValue() !== false) {
-								$url[] = $response->getValue();
-							}
-						}
-					}
-					else {
-						if ($part === '/') {
-							$partCount = count($url);
-							
-							if ($partCount > 0 && $url[$partCount-1]===$part) {
-								continue;
-							}
-						}
-						
-						$url[] = $part;
-					}
-				}
-				
-				if ($this->permalinkHasTrainingSlash()) {
-					$url[count($url)-1] .= '/';				
-				}
-
-				return $this->getUrl(implode('', $url));
-			}
-		}
-	}
-	
-	/**
-	 * Craft a date string to help load posts
-	 *
-	 * @param array $date = array
-	 * @param array $time = array
-	 * @return string
-	 */
-	protected function _craftDateString(array $date = array(), array $time = array())
-	{
-		if (count($date) > 0 || count($time) > 0) {
-			$dateStr = '';
-	
-			foreach(array('-' => $date, ':' => $time) as $sep => $values) {
-				for($i = 0; $i <= 2; $i++ ) {
-					$dateStr .= (isset($values[$i]) ? $values[$i] : '%') . $sep;
-				}
-				
-				$dateStr = rtrim($dateStr, $sep) . ' ';
-			}
-			
-			return rtrim($dateStr);
-		}
-		
-		return false;
-	}
-
-	/**
-	 * Generates the category portion of the URL for a post
-	 *
-	 * @param Fishpig_Wordpress_Model_Post $post
-	 * @return string
-	 */
-	protected function _getPermalinkCategoryPortion(Fishpig_Wordpress_Model_Post $post)
-	{
-		if ($category = $post->getParentCategory()) {
-			return trim($category->getSlug(), '/');
-		}
 	}
 	
 	/**
@@ -470,7 +282,7 @@ class Fishpig_Wordpress_Helper_Post extends Fishpig_Wordpress_Helper_Abstract
 	 */
 	public function getPostIdVar()
 	{
-		return $this->_postIdVar;
+		return 'p';
 	}
 	
 	/**
@@ -501,5 +313,27 @@ class Fishpig_Wordpress_Helper_Post extends Fishpig_Wordpress_Helper_Abstract
 	public function permalinkHasTrainingSlash()
 	{
 		return substr($this->getWpOption('permalink_structure'), -1) == '/';
+	}
+	
+	
+	/**
+	 * Deprecated
+	 */
+	protected function _getRawPermalinkStructure()
+	{
+		return $this->getPermalinkStructure();
+	}
+
+	/**
+	 * Deprecated
+	 */
+	protected function _getPermalinkStructure()
+	{
+		return $this->getPermalinkStructure();
+	}
+	
+	protected function _getExplodedPermalinkStructure()
+	{
+		return $this->getExplodedPermalinkStructure();
 	}
 }

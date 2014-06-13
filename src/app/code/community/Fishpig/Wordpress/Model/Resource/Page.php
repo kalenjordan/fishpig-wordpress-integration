@@ -8,6 +8,13 @@
 
 class Fishpig_Wordpress_Model_Resource_Page extends Fishpig_Wordpress_Model_Resource_Post_Abstract
 {
+	/**
+	 * Page URI cache
+	 *
+	 * @var null|array
+	 */
+	static $_uriCache = null;
+	
 	public function _construct()
 	{
 		$this->_init('wordpress/page', 'ID');
@@ -28,35 +35,6 @@ class Fishpig_Wordpress_Model_Resource_Page extends Fishpig_Wordpress_Model_Reso
 
 		return $select;
 	}
-
-	/**
-	 * Retrieve the permalink for a pge
-	 *
-	 * @param Fishpig_Wordpress_Model_Page $page
-	 * @return string
-	 */
-	public function getPermalink(Fishpig_Wordpress_Model_Page $page)
-	{
-		$uriParts = array();
-		$buffer = $page;
-		
-		do {
-			$uriParts[] = $buffer->getPostName();
-			$buffer = $buffer->getParentPage();
-		} while($buffer && $buffer->getId());
-	
-		$parts = count($uriParts);
-		
-		if ($parts > 1) {
-			$uriParts = array_reverse($uriParts);
-		}
-		
-		if ($parts > 0) {
-			return Mage::helper('wordpress')->getUrl(implode('/', $uriParts) . '/');
-		}
-		
-		return '';
-	}
 	
 	/**
 	 * Retrieve a pages parent page
@@ -69,9 +47,9 @@ class Fishpig_Wordpress_Model_Resource_Page extends Fishpig_Wordpress_Model_Reso
 		if ($page->getPostParent()) {
 			$parent = Mage::getModel('wordpress/page')->load($page->getPostParent());
 			
-			if ($parent->getId()) {
-				return $parent;
-			}
+			return $parent->getId()
+				? $parent
+				: false;
 		}
 	
 		return false;
@@ -105,6 +83,48 @@ class Fishpig_Wordpress_Model_Resource_Page extends Fishpig_Wordpress_Model_Reso
 	public function getChildrenPages(Fishpig_Wordpress_Model_Page $page)
 	{
 		return $page->getCollection()
-			->addPostParentIdFilter($page->getId());
+			->addPostParentIdFilter($page->getId())
+			->orderByMenuOrder();
+	}
+	
+	/**
+	 * Retrieve the permalink for a pge
+	 *
+	 * @param Fishpig_Wordpress_Model_Page $page
+	 * @return string
+	 */
+	public function getPermalink(Fishpig_Wordpress_Model_Page $page)
+	{
+		if ($uris = $this->getAllUris()) {
+			if (isset($uris[$page->getId()])) {
+				return Mage::helper('wordpress')->getUrl($uris[$page->getId()] . '/');
+			}
+		}
+		
+		return Mage::helper('wordpress')->getUrl() . '?page_id=' . $page->getId();
+	}
+	
+	/**
+	 * Retrieve all possible page URIs
+	 *
+	 * @return array
+	 */
+	public function getAllUris()
+	{
+		if (is_array(self::$_uriCache)) {
+			return self::$_uriCache;	
+		}
+		
+		$select = $this->_getReadAdapter()
+			->select()
+			->from(array('term' => $this->getMainTable()), array('id' => 'ID','url_key' =>  'post_name', 'parent' => 'post_parent'))
+			->where('post_type=?', 'page')
+			->where('post_status=?', 'publish');
+			
+		self::$_uriCache = Mage::helper('wordpress/router')->generateRoutesFromArray(
+			$this->_getReadAdapter()->fetchAll($select)
+		);
+		
+		return self::$_uriCache;
 	}
 }

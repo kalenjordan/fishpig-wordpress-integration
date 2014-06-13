@@ -1,4 +1,10 @@
 <?php
+/**
+ * @category    Fishpig
+ * @package     Fishpig_Wordpress
+ * @license     http://fishpig.co.uk/license.txt
+ * @author      Ben Tideswell <help@fishpig.co.uk>
+ */
 
 class Fishpig_Wordpress_Block_Sidebar_Widget_Tagcloud extends Fishpig_Wordpress_Block_Sidebar_Widget_Abstract
 {
@@ -13,19 +19,26 @@ class Fishpig_Wordpress_Block_Sidebar_Widget_Tagcloud extends Fishpig_Wordpress_
 			$this->setTags(false);
 
 			$tags = Mage::getResourceModel('wordpress/post_tag_collection')
-				->addTagCloudFilter();
-
-			$tags->load();
+				->addTagCloudFilter()
+				->setOrderByName()
+				->load();
 
 			if (count($tags) > 0) {
 				$max = 0;
+				$hasPosts = false;
 				
 				foreach($tags as $tag) {
 					$max = $tag->getCount() > $max ? $tag->getCount() : $max;
+					
+					if ($tag->getCount() > 0) {
+						$hasPosts = true;
+					}
 				}
-
-				$this->setMaximumPopularity($max);
-				$this->setTags($tags);
+				
+				if ($hasPosts) {
+					$this->setMaximumPopularity($max);
+					$this->setTags($tags);
+				}
 			}
 		}
 
@@ -40,29 +53,17 @@ class Fishpig_Wordpress_Block_Sidebar_Widget_Tagcloud extends Fishpig_Wordpress_
 	 */
 	public function getFontSize(Fishpig_Wordpress_Model_Post_Tag $tag)
 	{
-		$percentage = ($tag->getCount() * 100) / $this->getMaximumPopularity();
-		
-		foreach(array(25 => 90, 50 => 100, 75 => 120, 90 => 140, 100 => 150) as $percentageLimit => $default) {
-			if ($percentage <= $percentageLimit) {
-				return $this->_getConfigFontSize($percentage, $default);
+		if ($this->getMaximumPopularity() > 0) {
+			$percentage = ($tag->getCount() * 100) / $this->getMaximumPopularity();
+			
+			foreach($this->getFontSizes() as $percentageLimit => $default) {
+				if ($percentage <= $percentageLimit) {
+					return $default;
+				}
 			}
 		}
 		
-		return $this->_getConfigFontSize(100, 150);
-	}
-	
-	/**
-	 * Retrieve a font size from the config
-	 *
-	 * @param string $percent
-	 * @param mixed $default
-	 * @return string
-	 */
-	protected function _getConfigFontSize($percent, $default)
-	{
-		$key = 'wordpress_blog/tag_cloud/font_size_below_' . $percent;
-		
-		return Mage::getStoreConfig($key) ? Mage::getStoreConfig($key) : $default;
+		return 150;
 	}
 	
 	/**
@@ -72,6 +73,26 @@ class Fishpig_Wordpress_Block_Sidebar_Widget_Tagcloud extends Fishpig_Wordpress_
 	 */
 	public function getDefaultTitle()
 	{
-		return $this->__('Blog Tags');
+		return $this->__('Tag Cloud');
+	}
+	
+	/**
+	 * Retrieve an array of font sizes
+	 *
+	 * @return array
+	 */
+	public function getFontSizes()
+	{
+		if (!$this->hasFontSizes()) {
+			return array(
+				25 => 90,
+				50 => 100,
+				75 => 120,
+				90 => 140,
+				100 => 150
+			);
+		}
+		
+		return $this->_getData('font_sizes');
 	}
 }

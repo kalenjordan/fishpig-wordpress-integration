@@ -15,7 +15,9 @@ class Fishpig_Wordpress_Helper_Plugin_ShareThis extends Fishpig_Wordpress_Helper
 	 */
 	public function isEnabled()
 	{
-		return Mage::helper('wordpress')->isPluginEnabled('Share This');
+		Mage::helper('wordpress')->log(get_class($this) . ' is deprecated and will be removed shortly. Remove template references to it before upgrading');
+		
+		return false;
 	}
 
 	/**
@@ -55,17 +57,22 @@ class Fishpig_Wordpress_Helper_Plugin_ShareThis extends Fishpig_Wordpress_Helper
 			
 			if (preg_match_all("/(<span.*><\/span>)/iU", $html, $matches)) {
 				$tags = array();
-				
+
 				foreach($matches[1] as $match) {
 					$class = $this->_patternMatch("/class='(.*)'/iU", $match);
 					$displayText = $this->_patternMatch("/displayText='(.*)'/iU", $match);
+					$stVia = trim($this->_patternMatch("/st_via='(.*)'/iU", $match));
 					
 					if ($displayText) {
 						$displayText = ' displayText="' . $displayText . '" ';
 					}
+					
+					if ($stVia) {
+						$stVia = ' st_via="' . $stVia . '"';
+					}
 
-					$tag = sprintf('<span class="%s"%sst_title="%s" st_summary="%s" st_url="%s"></span>', 
-									$class, $displayText, addslashes($post->getPostTitle()), trim(strip_tags(addslashes($post->getPostExcerpt()))), $post->getPermalink());
+					$tag = sprintf('<span class="%s"%sst_title="%s" st_summary="%s" st_url="%s"%s></span>', 
+									$class, $displayText, addslashes($post->getPostTitle()), trim(strip_tags(addslashes($post->getPostExcerpt()))), $post->getPermalink(), $stVia);
 				
 					if ($image = $post->getFeaturedImage()) {
 						$tag = str_replace('></span>', ' st_image="' . $image->getAvailableImage() . '"></span>', $tag);

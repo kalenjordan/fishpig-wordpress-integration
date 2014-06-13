@@ -40,7 +40,7 @@ class Fishpig_Wordpress_Helper_Database extends Fishpig_Wordpress_Helper_Abstrac
 	 */
 	public function isSameDatabase()
 	{
-		return !Mage::helper('wordpress/config')->getConfigFlag('wordpress/database/is_different_db');
+		return Mage::helper('wordpress/config')->getConfigFlag('wordpress/database/is_shared');
 	}
 	
 	/*
@@ -192,12 +192,10 @@ class Fishpig_Wordpress_Helper_Database extends Fishpig_Wordpress_Helper_Abstrac
 			}
 		}
 		else if ($configs = $this->_getDatabaseDetails()) {
-
 			try {
 				$connection = Mage::getSingleton('core/resource')->createConnection('wordpress', 'pdo_mysql', $configs);
 			
 				if (!is_object($connection)) {
-					/* Magento 1.3.2.4 */
 					throw new Exception('Error connecting to the WordPress database');
 				}
 				

@@ -9,131 +9,260 @@
 class Fishpig_Wordpress_Controller_Router extends Fishpig_Wordpress_Controller_Router_Abstract
 {
 	/**
-	 * Create an instance of the router and add it to the queue
+	 * Remove the AW_Blog route to stop conflicts
 	 *
 	 * @param Varien_Event_Observer $observer
 	 * @return bool
 	 */
-    public function initControllerObserver(Varien_Event_Observer $observer)
+    public function initControllerBeforeObserver(Varien_Event_Observer $observer)
     {
-    	if (Mage::helper('wordpress')->isEnabled()) {
-    		return parent::initControllerObserver($observer);
+    	if (Mage::getDesign()->getArea() === 'frontend') {
+	    	$node = Mage::getConfig()->getNode('global/events/controller_front_init_routers/observers');
+    	
+	    	if (isset($node->blog)) {
+		    	unset($node->blog);
+
+		    	Mage::getConfig()->setNode('modules/AW_Blog/active', 'false', true);
+		    	Mage::getConfig()->setNode('frontend/routers/blog', null, true);
+		    }
         }
-        
+
         return false;
     }
-	
+    	
 	/**
-	 * Performs the logic for self::match
+	 * Initialize the static routes used by WordPress
 	 *
-	 * @param string $uri
-	 * @return bool
+	 * @return $this
 	 */
-	protected function _match($uri)
+	protected function _beforeMatch($uri)
 	{
-		$helper = Mage::helper('wordpress/router');
-		
-		Mage::dispatchEvent('wordpress_match_routes_before', array('router' => $this, 'helper' => $helper, 'uri' => $uri));
+		parent::_beforeMatch($uri);
 
-		if ($helper->isPostUri($uri)) {
-			if (($post = Mage::helper('wordpress/post')->loadByPermalink($uri)) !== false) {
-				Mage::register('wordpress_post_temp', $post);
-
-				return $this->setRoutePath('*/post/view');
-			}
-			else if (($postId = Mage::helper('wordpress/post')->getPostId()) !== false) {
-				return $this->setRoutePath('*/post/view');
-			}
+		if (!$uri) {
+			$this->addRouteCallback(array($this, '_getHomepageRoutes'));	
 		}
 		
-		if ($helper->isNoBaseCategoryUri($uri)) {
-			return $this->setRoutePath('*/post_category/view');
-		}
+		$this->addRouteCallback(array($this, '_getSimpleRoutes'));
+		$this->addRouteCallback(array($this, '_getPostCategoryRoutes'));
+		$this->addRouteCallback(array($this, '_getPageRoutes'));
+		$this->addRouteCallback(array($this, '_getPostRoutes'));
+		$this->addRouteCallback(array($this, '_getPostAttachmentRoutes'));
+		$this->addRouteCallback(array($this, '_getCustomTaxonomyUris'));
 		
-		if ($helper->isPageUri($uri)) {
-			return $this->setRoutePath('*/page/view');
-		}
-		
-		if ($helper->isTermUri($uri)) {
-			return $this->setRoutePath('*/term/view');
-		}
-		
-		if ($helper->isPostAttachmentUri($uri)) {
-			return $this->_redirectFromAttachmentUriToPost($uri);
-		}
-
-		Mage::dispatchEvent('wordpress_match_routes_after', array('router' => $this, 'helper' => $helper, 'uri' => $uri));
-		
-		return $this->_hasValidRouteDetails();
+		return $this;	
 	}
 
 	/**
-	 * Adds redirects from attachment pages to parent post
-	 * This stops 404 errors showing up in Google Analytics
+	 * Get route data for different homepage URLs
 	 *
-	 * @param string $uri
-	 * @return bool
+	 * @param string $uri = ''
+	 * @return $this
 	 */
-	protected function _redirectFromAttachmentUriToPost($uri)
+	protected function _getHomepageRoutes($uri = '')
 	{
-		if (strpos($uri, '/') !== false) {
-			$postUri = substr($uri, 0, strrpos($uri, '/'));
+		// NextGEN Gallery fix
+		if (Mage::app()->getRequest()->getParam('format') === 'json') {
+			return $this->addRoute('', '*/index/forward');
+		}
+
+		if ($postId = Mage::app()->getRequest()->getParam('p')) {
+			return $this->addRoute('', '*/post/view', array('p' => $postId, 'id' => $postId));
+		}
+
+		if (($pageId = $this->_getHomepagePageId()) !== false) {
+			return $this->addRoute('', '*/page/view', array('id' => $pageId, 'is_home' => 1));
+		}
+	
+		$this->addRoute('', '*/index/index');
+		
+		return $this;
+	}
+	
+	/**
+	 * Generate the basic simple routes that power WP
+	 *
+	 * @param string $uri = ''
+	 * @return false|$this
+	 */	
+	protected function _getSimpleRoutes($uri = '')
+	{
+		if (strpos($uri, 'ajax/') === 0) {
+			$this->_getAjaxRoutes($uri);
+		}
+
+		$this->addRoute(array('/^' . Mage::getSingleton('wordpress/post_tag')->getUriPrefix() . '\/(.*)$/' => array('tag')), '*/post_tag/view');
+		$this->addRoute(array('/^author\/([^\/]{1,})/' => array('author')), '*/author/view');
+		$this->addRoute(array('/^([1-2]{1}[0-9]{3})\/([0-1]{1}[0-9]{1})$/' => array('year', 'month')), '*/archive/view');
+		$this->addRoute(array('/^([1-2]{1}[0-9]{3})\/([0-1]{1}[0-9]{1})$/' => array('year', 'month')), '*/archive/view');
+		$this->addRoute(array('/^([1-2]{1}[0-9]{3})\/([0-1]{1}[0-9]{1})\/([0-3]{1}[0-9]{1})$/' => array('year', 'month', 'day')), '*/archive/view');
+		$this->addRoute(array('/^search\/(.*)$/' => array('s')), '*/search/index');
+		$this->addRoute('/^index.php/i', '*/index/forward');
+		$this->addRoute('/^wp-content\/(.*)/i', '*/index/forwardFile');
+		$this->addRoute('/^wp-includes\/(.*)/i', '*/index/forwardFile');
+		$this->addRoute('/^wp-cron.php.*/', '*/index/forwardFile');
+		$this->addRoute('/^wp-admin[\/]{0,1}$/', '*/index/wpAdmin');
+		$this->addRoute('/^wp-pass.php.*/', '*/index/applyPostPassword');
+		$this->addRoute('robots.txt', '*/index/robots');
+		$this->addRoute('comments', '*/index/commentsFeed');
+		$this->addRoute(array('/^newbloguser\/(.*)$/' => array('code')), '*/index/forwardNewBlogUser');
+		
+		return $this;
+	}
+
+	/**
+	 * Retrieve routes for the AJAX methods
+	 * These can be used to get another store's blogs blocks
+	 *
+	 * @param string $uri = ''
+	 * @return $this
+	 */
+	protected function _getAjaxRoutes($uri = '')
+	{
+		$this->addRoute(array('/^ajax\/handle\/([^\/]{1,})[\/]{0,}$/' => array('handle')), '*/ajax/handle');
+		$this->addRoute(array('/^ajax\/block\/([^\/]{1,})[\/]{0,}$/' => array('block')), '*/ajax/block');
+		
+		return $this;
+	}
+
+	/**
+	 * Generate the post category routes
+	 *
+	 * @param string $uri = ''
+	 * @return false|$this
+	 */
+	protected function _getPostCategoryRoutes($uri = '')
+	{
+		$categoryModel = Mage::getSingleton('wordpress/post_category');
+
+		if (($base = $categoryModel->getUriPrefix()) !== '') {
+			$base = ltrim($base . '/', '/');
+
+			if (strpos(Mage::helper('wordpress/router')->getBlogUri(), $base) !== 0) {
+				return false;
+			}
+		}
+
+		if (($routes = $categoryModel->getAllUris()) !== false) {
+			foreach($routes as $routeId => $route) {
+				$this->addRoute($base . $route, '*/post_category/view', array('id' => $routeId));
+			}
+		}
+
+		return $this;
+	}
+
+	/**
+	 * Generate the page routers
+	 *
+	 * @param string $uri = ''
+	 * @return false|$this
+	 */
+	protected function _getPageRoutes($uri = '')
+	{
+		if (($routes = Mage::getResourceSingleton('wordpress/page')->getAllUris()) !== false) {
+			$homepagePageId = $this->_getHomepagePageId();
 			
-			header("HTTP/1.1 301 Moved Permanently");
-			header('Location: ' . Mage::helper('wordpress')->getUrl($postUri));
-			exit;
+			foreach($routes as $routeId => $route) {
+				$redirectTo = $homepagePageId && $homepagePageId == $routeId
+					? Mage::helper('wordpress')->getUrl()
+					: null;
+					
+				$this->addRoute($route, '*/page/view', array('id' => $routeId, '__redirect_to' => $redirectTo));
+			}
+			
+			return $this;
 		}
 		
 		return false;
 	}
 
 	/**
-	 * Initialize the static routes used by WordPress
+	 * Generate the post routes
 	 *
+	 * @param string $uri = ''
+	 * @return false|$this
+	 */
+	protected function _getPostRoutes($uri = '')
+	{
+		$routes = Mage::getResourceSingleton('wordpress/post')->getPermalinksByUri($uri);
+
+		if ($routes === false) {
+			return false;
+		}
+
+		foreach($routes as $routeId => $route) {
+			$route = rtrim($route, '/');
+
+			$this->addRoute($route, '*/post/view', array('id' => $routeId));
+			$this->addRoute($route . '/feed', '*/post/feed', array('id' => $routeId));
+		}
+
+		return $this;
+	}
+
+	/**
+	 * Generate the post routes
+	 *
+	 * @param string $uri = ''
+	 * @return false|$this
+	 */
+	protected function _getPostAttachmentRoutes($uri = '')
+	{
+		if (!preg_match('/^(.*)\/attachment\/([^\/]+$)/', $uri, $match)) {
+			return $this;
+		}
+
+		$attachment = Mage::getModel('wordpress/post')->setPostType('attachment')->load($match[2], 'post_name');
+		
+		if (!$attachment->getId() || !$attachment->getGuid()) {
+			return $this;
+		}
+
+		header('Location: ' . $attachment->getData('guid'));
+		exit;
+	}
+	
+	/**
+	 * Get the custom taxonomy URI's
+	 * First check whether a valid taxonomy exists in $uri
+	 *
+	 * @param string $uri = ''
 	 * @return $this
 	 */
-	protected function _initStaticRoutes()
+	protected function _getCustomTaxonomyUris($uri = '')
 	{
-		if (!Mage::helper('wordpress/post')->getPostId()) {
-			$this->addStaticRoute('/^$/');
+		$parts = explode('/', $uri);
+
+		$term = Mage::getModel('wordpress/term')->setTaxonomy(array_shift($parts));
+
+		if (($routes = $term->getAllUris()) !== false) {
+			foreach($routes as $routeId => $route) {
+				$this->addRoute($term->getTaxonomyType() . '/' . $route, '*/term/view', array('id' => $routeId, 'taxonomy' => $term->getTaxonomyType()));
+			}
 		}
-
-		$helper = Mage::helper('wordpress/router');
-
-		if ($helper->categoryUrlHasBase()) {
-			$this->addStaticRoute('/^' . $helper->getCategoryBase() . '\/.*$/i', 'view', 'post_category');
-		}
 		
-		$tagBase = $helper->getTagBase();
-
-		$this	->addStaticRoute('/^' . $tagBase . '\/.*$/', 'view', 'post_tag');
-		$this->addStaticRoute('/^author\/.*$/', 'view', 'author');
-
-		// Archive static routes
-		$year = '[1-2]{1}[0-9]{3}';
-		$month = '[0-1]{1}[0-9]{1}';
-		$day = '[0-3]{1}[0-9]{1}';
-		
-		$this->addStaticRoute('/^' . $year . '\/' . $month . '[\/]{0,1}$/', 'view', 'archive');
-		$this->addStaticRoute('/^' . $year . '\/' . $month . '\/' . $day . '[\/]{0,1}$/', 'view', 'archive');
-		
-		if (Mage::helper('wordpress/search')->isEnabled()) {
-			$searchBase = Mage::helper('wordpress/search')->getSearchRoute();
-			
-			$this->addStaticRoute('/^' . $searchBase . '/', 'index', 'search');
-		}
-
-		// Forward certain request directly to WP		
-		$this->addStaticRoute('/^index.php/i', 'forward');
-		$this->addStaticRoute('/^wp-content\/(.*)/i', 'forwardFile');
-		$this->addStaticRoute('/^wp-includes\/(.*)/i', 'forwardFile');
-		$this->addStaticRoute('/^wp-cron.php.*/', 'forwardFile');
-		$this->addStaticRoute('/^wp-admin[\/]{0,1}$/', 'wpAdmin');
-		$this->addStaticRoute('/^wp-pass.php.*/', 'applyPostPassword');
-		$this->addStaticRoute('/^robots.txt$/i', 'robots');
-		
-		$this->addStaticRoute('/^[^\/]{0,}sitemap[^\/]{0,}.xml$/', 'sitemap');
-		
-		return parent::_initStaticRoutes();
+		return $this;
+	}
+	
+	/**
+	 * If a page is set as a custom homepage, get it's ID
+	 *
+	 * @return false|int
+	 */
+	protected function _getHomepagePageId()
+	{
+		return Mage::helper('wordpress/router')->getHomepagePageId();
+	}
+	
+	/**
+	 * Determine whether to add routes
+	 *
+	 * @return bool
+	 */
+	public function isEnabled()
+	{
+		return (int)Mage::app()->getStore()->getId() !== 0 
+		&& Mage::helper('wordpress')->isEnabled();
 	}
 }

@@ -9,50 +9,28 @@
 class Fishpig_Wordpress_Block_Post_View_Comment_Form extends Fishpig_Wordpress_Block_Post_Abstract
 {
 	/**
-	 * JS inclusion flag
-	 *
-	 * @var static bool
-	 */
-	static protected $_isJsIncluded = false;
-	
-	/**
 	 * Inject the comments js
 	 *
 	 * @return $this
 	 */
 	protected function _prepareLayout()
 	{
-		if (self::$_isJsIncluded == false) {
-			self::$_isJsIncluded = true;
-			
-			if (($head = $this->getLayout()->getBlock('head')) !== false) {
-				$head->addJs('fishpig/wordpress/comments.js');
-			}
+		if (($head = $this->getLayout()->getBlock('head')) !== false) {
+			$head->addJs('fishpig/wordpress/comments.js');
 		}
 
 		return parent::_prepareLayout();
 	}
 	
+	/**
+	 * Ensure a valid template is set
+	 *
+	 * @return $this
+	 */
 	protected function _beforeToHtml()
 	{
 		if (!$this->getTemplate()) {
 			$this->setTemplate('wordpress/post/view/comment/form.phtml');
-		}
-
-		if ($this->helper('wordpress')->isPluginEnabled('comment-reply-notification')) {
-			if ($options = Mage::helper('wordpress')->getWpOption('commentreplynotification')) {
-				$options = unserialize($options);
-				
-				if (isset($options['mail_notify'])) {
-					if (in_array($options['mail_notify'], array('parent_check', 'parent_uncheck'))) {
-						$this->setCommentReplyNotificationEnabled(true);
-						
-						if ($options['mail_notify'] === 'parent_check') {
-							$this->setCommentReplyNotificationOptInChecked(true);
-						}
-					}
-				}
-			}
 		}
 		
 		return parent::_beforeToHtml();		

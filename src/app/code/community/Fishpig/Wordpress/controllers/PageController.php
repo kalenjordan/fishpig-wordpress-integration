@@ -18,7 +18,7 @@ class Fishpig_Wordpress_PageController extends Fishpig_Wordpress_Controller_Abst
 	{
 		return $this->_initPage();
 	}
-	
+		
 	/**
 	 * If the feed parameter is set, forward to the comments action
 	 *
@@ -27,16 +27,14 @@ class Fishpig_Wordpress_PageController extends Fishpig_Wordpress_Controller_Abst
 	public function preDispatch()
 	{
 		parent::preDispatch();
-		
-		$page = $this->_initPage();
-		
-		if (!Mage::getStoreConfigFlag('wordpress_blog/layout/ignore_custom_homepage')) {
-			if ($page->isBlogPage()) {
-				$this->_forceForwardViaException('index', 'index');
-				return false;
-			}
+
+		$this->_handlePostedComment();
+
+		if ($this->_initPage()->isBlogPage()) {
+			$this->_forceForwardViaException('index', 'index');
+			return false;
 		}
-	
+
 		return $this;	
 	}
 
@@ -46,10 +44,10 @@ class Fishpig_Wordpress_PageController extends Fishpig_Wordpress_Controller_Abst
 	 */
 	public function viewAction()
 	{
-		$page = Mage::registry('wordpress_page');
-
+		$page = $this->_initPage();
+		
 		$this->_addCustomLayoutHandles(array(
-			'wordpress_page_view_index',
+			'wordpress_page_view',
 			'wordpress_page_view_' . $page->getId(),
 		));
 		
@@ -60,25 +58,44 @@ class Fishpig_Wordpress_PageController extends Fishpig_Wordpress_Controller_Abst
 		if (($headBlock = $this->getLayout()->getBlock('head')) !== false) {
 			$headBlock->setDescription($page->getMetaDescription());
 		}
-		
-		$pages = array();
-		$buffer = $page;
 
-		while ($buffer) {
-			$this->_title(strip_tags($buffer->getPostTitle()));
-			$pages[] = $buffer;
-			$buffer = $buffer->getParentPage();
+		if ($this->getRequest()->getParam('is_home')) {
+			$page->setCanonicalUrl(
+				Mage::helper('wordpress')->getUrl()
+			);
+
+			if (Mage::helper('wordpress')->getBlogRoute() === '') {
+				$this->_crumbs = array();
+			}
+			else {
+				array_pop($this->_crumbs);
+
+				$this->addCrumb('wp_page', array(
+					'label' => $page->getPostTitle(),
+					'title' => $page->getPostTitle(),
+				));
+			}
 		}
-		
-		$pages = array_reverse($pages);
-		$lastPage = array_pop($pages);
-		
-		foreach($pages as $buffer) {
-			$this->addCrumb('page_' . $buffer->getId(), array('label' => $buffer->getPostTitle(), 'link' => $buffer->getPermalink()));
-		}
-		
-		if ($lastPage) {
-			$this->addCrumb('page_' . $lastPage->getId(), array('label' => $lastPage->getPostTitle()));
+		else {
+			$pages = array();
+			$buffer = $page;
+	
+			while ($buffer) {
+				$this->_title(strip_tags($buffer->getPostTitle()));
+				$pages[] = $buffer;
+				$buffer = $buffer->getParentPage();
+			}
+			
+			$pages = array_reverse($pages);
+			$lastPage = array_pop($pages);
+			
+			foreach($pages as $buffer) {
+				$this->addCrumb('page_' . $buffer->getId(), array('label' => $buffer->getPostTitle(), 'link' => $buffer->getPermalink()));
+			}
+			
+			if ($lastPage) {
+				$this->addCrumb('page_' . $lastPage->getId(), array('label' => $lastPage->getPostTitle()));
+			}
 		}
 		
 		$this->renderLayout();
@@ -94,11 +111,11 @@ class Fishpig_Wordpress_PageController extends Fishpig_Wordpress_Controller_Abst
 	{
 		$page = $this->_initPage();
 		
-		$this->_rootTemplates[] = 'template_page';
+		$this->_rootTemplates[] = 'page';
 				
-		$keys = array('onecolumn', '1column');
+		$keys = array('onecolumn', '1column', 'full-width');
 		$template = $page->getMetaValue('_wp_page_template');
-		
+
 		foreach($keys as $key) {
 			if (strpos($template, $key) !== false) {
 				$this->getLayout()->helper('page/layout')->applyTemplate('one_column');
@@ -122,7 +139,48 @@ class Fishpig_Wordpress_PageController extends Fishpig_Wordpress_Controller_Abst
 				return $page;
 			}
 		}
+
+		$page = Mage::getModel('wordpress/page')->load($this->getRequest()->getParam('id'));
+			
+		if ($page->getId()) {
+			Mage::register('wordpress_page', $page);
+			
+			return $page;
+		}
+
+		$page = Mage::getModel('wordpress/page')->load($this->getRequest()->getParam('page_id'));
+		
+		if ($page->getId()) {
+			header('Location: ' . $page->getUrl());
+			exit;
+		}
 		
 		return false;
-	}	
+	}
+	
+	/**
+	 * Display the appropriate message for a posted comment
+	 *
+	 * @return $this
+	 */
+	protected function _handlePostedComment()
+	{
+		$commentId = $this->getRequest()->getParam('comment');
+		
+		if ($commentId && $this->getRequest()->getActionName() === 'view') {
+			$comment = Mage::getModel('wordpress/post_comment')->load($commentId);
+			
+			if ($comment->getId() && $comment->getPost()->getId() === $this->getEntityObject()->getId()) {
+				if ($comment->isApproved()) {
+					header('Location: ' . $comment->getUrl());
+					exit;
+				}
+				else {
+					Mage::getSingleton('core/session')->addSuccess($this->__('Your comment is awaiting moderation.'));	
+				}
+			}
+		}
+		
+		return $this;
+	}
 }

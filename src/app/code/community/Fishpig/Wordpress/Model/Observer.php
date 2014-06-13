@@ -18,7 +18,7 @@ class Fishpig_Wordpress_Model_Observer extends Varien_Object
 	/**
 	 * Save the associations
 	 *
-	 * @param Mage_Sitemap_Model_Sitemap $sitemap
+	 * @param Varien_Event_Observer $observer
 	 * @return bool
 	 */	
 	public function saveAssociationsObserver(Varien_Event_Observer $observer)
@@ -47,7 +47,7 @@ class Fishpig_Wordpress_Model_Observer extends Varien_Object
 			return false;
 		}
 		
-		if (Mage::getStoreConfigFlag('wordpress_blog/menu/enabled')) {
+		if (Mage::getStoreConfigFlag('wordpress/menu/enabled')) {
 			return $this->injectTopmenuLinks($observer->getEvent()->getMenu());
 		}
 	}
@@ -61,9 +61,9 @@ class Fishpig_Wordpress_Model_Observer extends Varien_Object
 	public function injectTopmenuLinks($topmenu, $menuId = null)
 	{
 		if (is_null($menuId)) {
-			$menuId = Mage::getStoreConfig('wordpress_blog/menu/id');
+			$menuId = Mage::getStoreConfig('wordpress/menu/id');
 		}
-		
+
 		if (!$menuId) {
 			return false;
 		}
@@ -73,42 +73,67 @@ class Fishpig_Wordpress_Model_Observer extends Varien_Object
 		if (!$menu->getId()) {
 			return false;
 		}
-		
-		if (count($items = $menu->getMenuItems()) > 0) {
-			return $this->_injectTopmenuLinks($items, $topmenu);
-		}
-		
-		return false;
-	}
-	
-	/**
-	 * Inject links into the top navigation
-	 *
-	 * @param Fishpig_Wordpress_Model_Resource_Menu_Item_Collection $items
-	 * @param Varien_Data_Tree_Node $parentNode
-	 * @return bool
-	 */
-	protected function _injectTopmenuLinks($items, $parentNode)
-	{
-		foreach($items as $item) {
-			$nodeId = 'wp-node-' . $item->getId();
-				
-			$data = array(
-				'name' => $item->getLabel(),
-				'id' => $nodeId,
-				'url' => $item->getUrl(),
-				'is_active' => $item->isItemActive(),
-			);
-			
-			$itemNode = new Varien_Data_Tree_Node($data, 'id', $parentNode->getTree(), $parentNode);
-			$parentNode->addChild($itemNode);
 
-			if (count($children = $item->getChildrenItems()) > 0) {
-				$this->_injectTopmenuLinks($children, $itemNode);
-			}
+		return $menu->applyToTreeNode($topmenu);
+	}
+
+	/**
+	 * Inject links into the Magento topmenu
+	 *
+	 * @param Varien_Data_Tree_Node $topmenu
+	 * @return bool
+	 */	
+	public function injectXmlSitemapLinksObserver(Varien_Event_Observer $observer)
+	{
+		if (!$this->_observerCanRun(__METHOD__)) {
+			return false;
+		}
+
+		$sitemap = $observer
+			->getEvent()
+				->getSitemap();
+
+		$sitemapFilename = $this->getPath() . $sitemap->getSitemapFilename();
+		
+		if (!file_exists($sitemapFilename)) {
+			return $this;
 		}
 		
-		return true;
+		$xml = trim(file_get_contents($sitemapFilename));
+		
+		// Trim off trailing </urlset> tag so we can add more
+		$xml = substr($xml, 0, -strlen('</urlset>'));
+
+		// Add the blog homepage
+		$xml .= sprintf(
+			'<url><loc>%s</loc><lastmod>%s</lastmod><changefreq>%s</changefreq><priority>%.1f</priority></url>',
+			htmlspecialchars(Mage::helper('wordpress')->getUrl()),
+			Mage::getSingleton('core/date')->gmtDate('Y-m-d'),
+			'daily',
+			'1.0'
+		);
+					
+		$posts = Mage::getResourceModel('wordpress/post_collection')
+			->setFlag('include_all_post_types', true)
+			->addIsViewableFilter()
+			->setOrderByPostDate()
+			->load();
+			
+		foreach($posts as $post) {
+			$xml .= sprintf(
+				'<url><loc>%s</loc><lastmod>%s</lastmod><changefreq>%s</changefreq><priority>%.1f</priority></url>',
+				htmlspecialchars($post->getUrl()),
+				$post->getPostModifiedDate('Y-m-d'),
+				'monthly',
+				'0.5'
+			);
+		}
+		
+		$xml .= '</urlset>';
+		
+		@file_put_contents($sitemapFilename, $xml);
+
+		return $this;
 	}
 	
 	/**

@@ -36,11 +36,12 @@ abstract class Fishpig_Wordpress_Model_Resource_Post_Abstract extends Fishpig_Wo
 	 * @param Fishpig_Wordpress_Model_Post_Abstract $post
 	 * @return Fishpig_Wordpress_Model_Resource_Post_Comment_Collection
 	 */
-	public function getPostComments(Fishpig_Wordpress_Model_Post_Abstract $post, $userEmail = null)
+	public function getPostComments(Fishpig_Wordpress_Model_Post_Abstract $post)
 	{
 		return Mage::getResourceModel('wordpress/post_comment_collection')
 			->addPostIdFilter($post->getId())
-			->addCommentApprovedFilter(1, $userEmail)
+			->addCommentApprovedFilter()
+			->addParentCommentFilter(0)
 			->addOrderByDate();
 	}
 	
@@ -69,7 +70,7 @@ abstract class Fishpig_Wordpress_Model_Resource_Post_Abstract extends Fishpig_Wo
 							'original_image_id' => $imageId,
 							'result' => new Varien_Object(),
 						);
-						
+
 						Mage::dispatchEvent('wordpress_post_get_featured_image_' . $prefix, $eventData);
 						
 						if ($eventData['result']->getFeaturedImage()) {
@@ -84,5 +85,34 @@ abstract class Fishpig_Wordpress_Model_Resource_Post_Abstract extends Fishpig_Wo
 		}
 		
 		return false;
+	}
+	
+	/**
+	 * Retrieve an array of post types
+	 *
+	 * @param array|bool $excludeDefault = false
+	 * @return array
+	 */
+	public function getAllPostTypes($excludeDefault = false)
+	{
+		$select = $this->_getReadAdapter()
+			->select()
+			->distinct()
+			->from($this->getMainTable(), 'post_type');
+		
+		if ($excludeDefault === true) {
+			$select->where('post_type NOT IN (?)', array(
+				'post',
+				'page',
+				'nav_menu_item',
+				'revision',
+				'attachment',
+			));
+		}
+		else if (is_array($excludeDefault)) {
+			$select->where('post_type NOT IN (?)', $excludeDefault);
+		}
+
+		return $this->_getReadAdapter()->fetchCol($select);
 	}
 }

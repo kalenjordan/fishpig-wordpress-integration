@@ -26,6 +26,8 @@ class Fishpig_Wordpress_Block_Page_View_Comment_Pager extends Fishpig_Wordpress_
 	 */	
 	public function getPage()
 	{
-		return Mage::registry('wordpress_page');
+		return $this->_getData('page')
+			? $this->_getData('page')
+			: Mage::registry('wordpress_page');
 	}
 }

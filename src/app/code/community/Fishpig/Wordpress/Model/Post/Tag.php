@@ -30,8 +30,7 @@ class Fishpig_Wordpress_Model_Post_Tag extends Fishpig_Wordpress_Model_Term
 	 */
 	public function loadByPostId($postId)
 	{
-		$this->load($postId, 'object_id');
-		return $this;
+		return $this->load($postId, 'object_id');
 	}
 	
 	/**
@@ -42,23 +41,39 @@ class Fishpig_Wordpress_Model_Post_Tag extends Fishpig_Wordpress_Model_Term
     public function getPostCollection()
     {
     	if (!$this->hasPostCollection()) {
-			$posts = Mage::getResourceModel('wordpress/post_collection')
-    			->addIsPublishedFilter()
-    			->addTagIdFilter($this->getId());
-    			
-    		$this->setPostCollection($posts);
+    		$this->setPostCollection(
+    			parent::getPostCollection()->addTagIdFilter($this->getId())
+    		);
     	}
     	
     	return $this->_getData('post_collection');
     }
 
 	/**
-	 * Gets the category URL
+	 * Retrieve the URI for this term
+	 * This takes into account parent relationships
+	 * This does not include the base URL
 	 *
 	 * @return string
 	 */
-	public function getUrl()
+	public function getUri()
 	{
-		return Mage::helper('wordpress')->getUrl(trim(Mage::helper('wordpress/router')->getTagBase(), '/') . '/' . $this->getSlug()) . '/';
+		if (!$this->hasUri()) {
+			$this->setUri($this->getSlug());
+		}
+		
+		return $this->_getData('uri');
+	}
+	
+	/*
+	 * Retrieve the tag base
+	 *
+	 * @return string
+	 */
+	public function getUriPrefix()
+	{
+		return ($base = trim(Mage::helper('wordpress')->getWpOption('tag_base', 'tag'), '/')) === ''
+			? 'tag'
+			: $base;
 	}
 }

@@ -12,7 +12,10 @@ class Fishpig_Wordpress_Model_System_Config_Source_Page_Template
 	{
 		$options = Mage::getModel('page/source_layout')->toOptionArray(false);
 		
-		array_unshift($options, array('value'=>'', 'label'=>Mage::helper('wordpress')->__('-- Default Template (Layout XML) --')));
+		array_unshift($options, array(
+			'value'=>'', 
+			'label'=> '-- ' . Mage::helper('wordpress')->__('Default Template') . ' --'
+		));
 
 		return $options;
 	}

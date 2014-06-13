@@ -6,8 +6,15 @@
  * @author      Ben Tideswell <help@fishpig.co.uk>
  */
 
-class Fishpig_Wordpress_Block_Sidebar extends Mage_Core_Block_Template
+class Fishpig_Wordpress_Block_Sidebar extends Fishpig_Wordpress_Block_Abstract
 {
+	/**
+	 * Allow dynamic sidebar/column placement
+	 *
+	 * @var array
+	 */
+	static $_lockedWidgetAreas = array();
+	
 	/**
 	 * Stores all templates for each widget block
 	 *
@@ -53,11 +60,16 @@ class Fishpig_Wordpress_Block_Sidebar extends Mage_Core_Block_Template
 	 */
 	protected function _beforeToHtml()
 	{
+		if (isset(self::$_lockedWidgetAreas[$this->getWidgetArea()])) {
+			return $this;
+		}
+		
+		self::$_lockedWidgetAreas[$this->getWidgetArea()] = true;
+
 		if ($widgets = $this->getWidgetsArray()) {
 			$this->_initAvailableWidgets();
 			
 			foreach($widgets as $widgetType) {
-
 				$name = $this->_getWidgetName($widgetType);
 				$widgetIndex = $this->_getWidgetIndex($widgetType);
 
@@ -74,6 +86,10 @@ class Fishpig_Wordpress_Block_Sidebar extends Mage_Core_Block_Template
 					}
 				}
 			}
+		}
+		
+		if (!$this->getTemplate()) {
+			$this->setTemplate('wordpress/sidebar.phtml');
 		}
 
 		return parent::_beforeToHtml();
@@ -123,10 +139,6 @@ class Fishpig_Wordpress_Block_Sidebar extends Mage_Core_Block_Template
 				if (isset($widgets[$this->getWidgetArea()])) {
 					return $widgets[$this->getWidgetArea()];
 				}
-				
-				if (isset($widgets[$this->getWidgetFallbackArea()])) {
-					return $widgets[$this->getWidgetFallbackArea()];
-				}
 			}
 		}
 
@@ -149,5 +161,48 @@ class Fishpig_Wordpress_Block_Sidebar extends Mage_Core_Block_Template
 		}
 		
 		return $this;
+	}
+	
+	/**
+	 * Determine whether or not to display the sidebar
+	 *
+	 * @return int
+	 */
+	public function canDisplay()
+	{
+		return 1;
+	}
+	
+	/**
+	 * Set the widget area.
+	 * This allows for support for Simple Page Sidebars
+	 *
+	 * @param string $widgetArea
+	 * @return $this
+	 */
+	public function setWidgetArea($widgetArea)
+	{
+		if ($this->hasWidgetArea()) {
+			return $this;
+		}
+		
+		$this->setData('widget_area', $widgetArea);
+
+		$widgetArea = null;
+
+		if ($post = Mage::registry('wordpress_post')) {
+			$widgetArea = $post->getMetaValue('_sidebar_name');
+		}
+		else if ($page = Mage::registry('wordpress_page')) {
+			$widgetArea = $page->getMetaValue('_sidebar_name');
+		}
+		
+		if (!$widgetArea) {
+			return $this;
+		}
+
+		$widgetArea = 'page-sidebar-' . preg_replace('/([^a-z0-9_-]{1,})/', '', strtolower(trim($widgetArea)));
+		
+		return $this->setData('widget_area', $widgetArea);
 	}
 }

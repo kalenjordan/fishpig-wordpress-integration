@@ -124,7 +124,7 @@ implements Mage_Adminhtml_Block_Widget_Tab_Interface
     {
 		if ($this->_getWpEntity() === 'post') {
 			$collection = Mage::getResourceModel('wordpress/post_collection')
-				->addIsPublishedFilter();
+				->addIsViewableFilter();
 		}
 		else if ($this->_getWpEntity() === 'category') {
 			$collection = Mage::getResourceModel('wordpress/post_category_collection');
@@ -132,12 +132,22 @@ implements Mage_Adminhtml_Block_Widget_Tab_Interface
 		else {
 			return false;
 		}
-
+		
+		Mage::dispatchEvent('wordpress_association_' . $this->_getWpEntity() . '_collection_load_before', array('collection' => $collection, 'grid' => $this));
+		
 		Mage::helper('wordpress/associations')->addRelatedPositionToSelect($collection, $this->getAssociationType(), $this->_getObject()->getId(), $this->getStoreId());
 
 		$this->setCollection($collection);
-
-		return parent::_prepareCollection();
+		
+		try {
+			return parent::_prepareCollection();
+		}
+		catch (Exception $e) {
+			echo sprintf('<div><ul class="messages"><li class="error-msg"><ul><li><span>%s</span></li></ul></li></ul></div>', $e->getMessage());
+			echo '<p>Your WordPress database user does not have permission to access the association tables in the Magento database. To fix this, either grant SELECT permission for your WordPress database user to the Magento tables that start with wordpress_ or merge your WordPress and Magento databases.</p>';
+			echo '<p>If you are having trouble doing this or just want it handling quickly for you, FishPig offer a <a href="http://fishpig.co.uk/migrate-wordpress-database-to-magento.html?mag" target="_blank">WordPress and Magento database merging</a> service.</p>';
+			exit;
+		}
 	}
 	
 	/**

@@ -6,7 +6,7 @@
  * @author      Ben Tideswell <help@fishpig.co.uk>
  */
 
-class Fishpig_Wordpress_Block_Post_Associated extends Mage_Core_Block_Template
+class Fishpig_Wordpress_Block_Post_Associated extends Fishpig_Wordpress_Block_Abstract
 {
 	/**
 	 * Cache for post collection
@@ -15,6 +15,18 @@ class Fishpig_Wordpress_Block_Post_Associated extends Mage_Core_Block_Template
 	 */
 	protected $_postCollection = null;
 
+	/**
+	 * Ensure the DB details are set
+	 *
+	 * @return $this
+	 */
+	protected function _prepareLayout()
+	{
+		$this->helper('wordpress/database')->connect();
+		
+		return parent::_prepareLayout();
+	}
+	
 	/**
 	 * Retrieve the association entity type
 	 *
@@ -70,11 +82,26 @@ class Fishpig_Wordpress_Block_Post_Associated extends Mage_Core_Block_Template
 			$helper = $this->helper('wordpress/associations');
 
 			if ($this->getObject() instanceof Mage_Catalog_Model_Product) {
-				$this->_postCollection = $helper->getAssociatedPostsByProduct($this->getObject());
+				$collection = $helper->getAssociatedPostsByProduct($this->getObject());
 			}
 			else if ($this->getObject() instanceof Mage_Cms_Model_Page) {
-				$this->_postCollection = $helper->getAssociatedPostsByCmsPage($this->getObject());
+				$collection = $helper->getAssociatedPostsByCmsPage($this->getObject());
 			}
+			
+			if ($collection) {
+				if ($this->getCount()) {
+					$collection->setCurPage(1)->setPageSize($this->getCount());
+				}
+				
+				if ($this->getOrder()) {
+					$dir = $this->getOrderDir() ? $this->getOrderDir() : 'asc';
+					$collection->getSelect()->order($this->getOrder() . ' ' . $dir);
+				}
+			}
+
+			Mage::dispatchEvent('wordpress_association_post_collection_load_before', array('collection' => $collection));
+			
+			$this->_postCollection = $collection;
 		}
 
 		return $this->_postCollection;

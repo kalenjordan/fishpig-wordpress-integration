@@ -6,121 +6,174 @@
  * @author      Ben Tideswell <help@fishpig.co.uk>
  */
 
-class Fishpig_Wordpress_Block_Feed_Abstract extends Mage_Core_Block_Template
+abstract class Fishpig_Wordpress_Block_Feed_Abstract extends Fishpig_Wordpress_Block_Abstract
 {
-	public function __construct()
-	{
-		$this->setTemplate('wordpress/feed/default.phtml');
-	}
-
 	/**
-	 * Retrieve the DocType for the XML feed
+	 *
+	 * @param $feed
+	 * @return
+	 */
+	abstract protected function _addEntriesToFeed($feed);
+	
+	/**
+	 * Generate and return the feed
 	 *
 	 * @return string
 	 */
-	public function getDocType()
+	protected function _toHtml()
 	{
-		return '<?xml version="1.0" encoding="'.$this->getBlogCharset().'"?>'."\n";
+		return $this->getFeedWriter()->export($this->getFeedType());		
 	}
 	
+	/**
+	 * Retrieve the items array
+	 *
+	 * @return array
+	 */
+	public function getFeedWriter()
+	{
+		$feed = new Zend_Feed_Writer_Feed;
+
+		$feed->setTitle($this->getTitle());
+		$feed->setLink($this->getLink());
+		$feed->setDescription($this->getDescription());
+		$feed->setFeedLink($this->getFeedLink(), 'atom');
+		$feed->setDateModified(time());
+		$feed->setLanguage($this->getLanguage());
+		$feed->setGenerator($this->getGenerator());
+		$this->_addEntriesToFeed($feed);
+			
+		return $feed;
+	}
+
+	/**
+	 * Allow subclasses to filter items
+	 *
+	 * @return $this
+	 */
+	protected function _prepareItemCollection($collection)
+	{
+		$collection->setPageSize(
+			Mage::helper('wordpress')->getWpOption('posts_per_rss', 10)
+		);
+
+		return $this;
+	}
+		
 	/**
 	 * Retrieve the blog charset
-	 * This is set in the WordPress Admin
 	 *
 	 * @return string
 	 */
-	public function getBlogCharset()
-	{
-		return Mage::helper('wordpress')->getWpOption('blog_charset');
-	}
-	
-	/**
-	 * Retrieve the RSS title
-	 * This is the blog name
-	 *
-	 * @return string
-	 */
-	public function getRssTitle()
-	{
-		return $this->getBlogName();
-	}
+	 public function getCharset()
+	 {
+		 return 'UTF-8';
+	 }
 
-	/*
-	 * Retrieve the blog name
+	/**
+	 * Retrieve the feed title
 	 *
 	 * @return string
 	 */
-	public function getBlogName()
+	public function getTitle()
 	{
-		return $this->decode(Mage::helper('wordpress')->getWpOption('blogname'));
-	}
-	
-	public function getDescription()
-	{
-		$description = $this->decode(Mage::helper('wordpress')->getWpOption('blogdescription'));
-		
-		if (!$description) {
-			return $this->getBlogName();
+		if (($blogName = $this->decode(trim(Mage::helper('wordpress')->getWpOption('blogname')))) !== '') {
+			return $blogName;
 		}
 		
-		return $description;
-	}
-	
-	/**
-	 * Retrieve the language of the RSS file
-	 *
-	 * @return string
-	 */
-	public function getRssLanguage()
-	{
-		return Mage::helper('wordpress')->getWpOption('rss_language');
+		if (($storeName = $this->decode(trim(Mage::getStoreConfig('general/store_information/name')))) !== '') {
+			return $storeName . ' ' . $this->__('Blog Feed');
+		}
+		
+		return $this->__('Blog Feed');
 	}
 
 	/**
-	 * Decode a values html entities
+	 * Retrieve the feed link
 	 *
-	 * @param string $value
+	 * @return string
+	 */	
+	public function getLink()
+	{
+		return Mage::helper('wordpress')->getUrl();
+	}
+
+	/**
+	 * Retrieve the feed description
+	 *
 	 * @return string
 	 */
+	public function getDescription()
+	{
+		if (($description = trim($this->decode(Mage::helper('wordpress')->getWpOption('blogdescription')))) !== '') {
+			return $description;
+		}
+	
+		return $this->getTitle();
+	}
+
+	/**
+	 * Retrieve the feed language
+	 *
+	 * @return string
+	 */
+	public function getLanguage()
+	{
+		if (($language = trim(Mage::helper('wordpress')->getWpOption('rss_language'))) !== '') {
+			return $language;
+		}
+		
+		return 'en-US';
+	}
+
+	/**
+	* Decode a values html entities
+	*
+	* @param string $value
+	* @return string
+	*/
 	public function decode($value)
 	{
 		return html_entity_decode($value, ENT_NOQUOTES, $this->getBlogCharset());
 	}
 	
 	/**
-	 * Shorten a string 
+	 * Retrieve the generator value
 	 *
-	 * @param string $str
-	 * @param int $wordCount = 100
-	 * @param string $end = '...'
 	 * @return string
 	 */
-	public function shorten($str, $wordCount = 100, $end = '...')
+	public function getGenerator()
 	{
-		$str = strip_tags(preg_replace("/(<br[ ]{0,}>)/", "--TEST--", $str));
-		$words = explode(' ', $str);
-		$length = count($words);
-		
-		if ($length > $wordCount) {
-			$words = array_splice($words, 0, $wordCount);
-			return rtrim(implode(' ', $words), " .!?,;-:'\"\n") . $end;
-		}
-		
-		return $str;
+		return 'http://fishpig.co.uk/magento/wordpress-integration/?v='
+			. (string)Mage::getConfig()->getNode('modules/Fishpig_Wordpress/version');
 	}
 	
 	/**
-	 * Retrieve a posts featured image
+	 * Retrieve the feed link
 	 *
-	 * @param Fishpig_Wordpress_Model_Post $post
-	 * @return false|Fishpig_Wordpress_Model_Image
+	 * @return string
 	 */
-	public function getFeaturedImageUrl(Fishpig_Wordpress_Model_Post $post)
+	public function getFeedLink()
 	{
-		if ($image = $post->getFeaturedImage()) {
-			return $image->getThumbnailImage();
+		return Mage::helper('core/url')->getCurrentUrl();
+	}
+
+	/**
+	 * Retrieve the feed type
+	 *
+	 * @return string
+	 */
+	public function getFeedType()
+	{
+		$validTypes = array(
+			'rss',
+			'atom',
+		);
+		
+		if (in_array($this->_getData('feed_type'), $validTypes)) {
+			return $this->_getData('feed_type');
 		}
 		
-		return false;
+		return 'rss';
 	}
 }

@@ -18,11 +18,13 @@ class Fishpig_Wordpress_Model_System_Config_Source_Menu
 				'label' => Mage::helper('adminhtml')->__('-- Please Select --')
 			));
 			
-			$menus = Mage::getResourceModel('wordpress/menu_collection')
-				->load();
+			if (Mage::helper('wordpress/database')->getReadAdapter()) {
+				$menus = Mage::getResourceModel('wordpress/menu_collection')
+					->load();
 				
-			foreach($menus as $menu) {
-				$this->_options[] = array('value' => $menu->getId(), 'label' => $menu->getName());
+				foreach($menus as $menu) {
+					$this->_options[] = array('value' => $menu->getId(), 'label' => $menu->getName());
+				}
 			}
 		}
 		

@@ -6,8 +6,6 @@
  * @author      Ben Tideswell <help@fishpig.co.uk>
  */
 ?>
-<?php $helper = $this->helper('wordpress/search') ?>
-<?php if ($helper->isEnabled()): ?>
 <div class="block block-blog block-blog-search">
 	<?php if ($title = $this->getTitle()): ?>
 		<div class="block-title">
@@ -17,43 +15,15 @@
 	<div class="block-content">
 		<form method="get" action="<?php echo $this->getFormActionUrl() ?>" id="blog-search-form">
 			<div class="blog-search">
-				<input type="text" class="input-text" value="<?php echo $helper->getEscapedSearchString() ?>" name="<?php echo $helper->getQueryVarName() ?>" id="blog-search" />
-				<button class="button" title="<?php echo $this->__($this->getButtonText()) ?>" type="submit"><span><span><?php echo $this->__('Search') ?></span></span></button>
-				<script type="text/javascript">
-				//<![CDATA[
-					var wpSearchForm = Class.create(Varien.searchForm, {
-						initialize : function($super, form, field, emptyText, useSeoUrls) {
-							this.useSeoUrls = useSeoUrls;
-							return $super(form, field, emptyText);
-						},
-						submit : function($super, event) {
-							if (this.useSeoUrls) {
-								var o = this.form.readAttribute('action');
-								var n = this.form.readAttribute('action') + encodeURIComponent(this.field.getValue().replace(' ', '-')) + '/';
-				
-								this.form.writeAttribute('action', n);
-								this.field.writeAttribute('disabled', 'disabled');
-								
-								if (!$super(event)) {
-									this.form.writeAttribute('action', o);
-									this.field.writeAttribute('disabled', null);
-									
-									Event.stop(event);
-									return false;
-								}
-								
-								return true;
-							}
-					
-							return $super(event);
-						}
-					});
-				
-					var searchForm = new wpSearchForm('blog-search-form', 'blog-search', '<?php echo $this->__($helper->getDefaultInputValue()) ?>', true);
-				//]]>
-				</script>
+				<?php if ($this->getPostType()): ?>
+				<div class="no-display">
+					<input type="hidden" name="post_type" value="<?php echo $this->getPostType() ?>" />
+				</div>
+				<?php endif; ?>
+				<input type="text" name="s" class="input-text" title="<?php echo $this->__('Search Posts') ?>" value="<?php echo $this->escapeHtml($this->getSearchTerm()) ?>"/>
+				<button class="button" title="<?php echo $this->__('Search') ?>" type="submit"><span><span><?php echo $this->__('Search') ?></span></span></button>
+				<script type="text/javascript">new fishpig.WP.Search.Form('blog-search-form');</script>
 			</div>
 		</form>
 	</div>
 </div>
-<?php endif; ?>

@@ -25,13 +25,26 @@ class Fishpig_Wordpress_Model_Archive extends Varien_Object
 		
 		if (strlen($value) == 7) {
 			$this->setName(date('F Y', strtotime($value.'/01 01:01:01')));
+			$this->setDateString(strtotime(str_replace('/', '-', $value) . ' 01:01:01'));
 		}
 		else {
 			$this->setName(date('F j, Y', strtotime($value.' 01:01:01')));
+			$this->setDateString(strtotime(str_replace('/', '-', $value) . '-01 01:01:01'));
 			$this->setIsDaily(true);
 		}
 		
 		return $this;
+	}
+
+	/**
+	 * Get a date formatted string
+	 *
+	 * @param string $format
+	 * @return string
+	 */
+	public function getDatePart($format)
+	{
+		return date($format, $this->getDateString());
 	}
 
 	/**
@@ -67,7 +80,8 @@ class Fishpig_Wordpress_Model_Archive extends Varien_Object
 	{
 		if (!$this->hasPostCollection()) {
 			$collection = Mage::getResourceModel('wordpress/post_collection')
-				->addIsPublishedFilter()
+				->setFlag('source', $this)
+				->addIsViewableFilter()
 				->addArchiveDateFilter($this->getId(), $this->getIsDaily())
 				->setOrderByPostDate();
 

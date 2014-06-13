@@ -9,41 +9,6 @@
 class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 {
 	/**
-	 * The variable used for pages
-	 *
-	 * @var string
-	 */
-	protected $_postPagerVar = 'page';
-	
-	/**
-	 * The variable used for the toolbar order var
-	 *
-	 * @var string
-	 */
-	protected $_postToolbarOrderVar = 'order';
-	
-	/**
-	 * The variable format used for comment pages
-	 *
-	 * @var string
-	 */
-	protected $_commentPagerVarFormat = '^comment-page-%s$';
-	
-	/**
-	 * The variable used to indicate this is a feed page
-	 *
-	 * @var string
-	 */
-	protected $_feedVar = 'feed';
-	
-	/**
-	 * The variable used to indicate a trackback page
-	 *
-	 * @var string
-	 */
-	protected $_trackbackVar = 'trackback';
-	
-	/**
 	 * Retrieve the blog URI
 	 * This is the whole URI after blog route
 	 *
@@ -51,18 +16,25 @@ class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 	 */
 	public function getBlogUri()
 	{
-		$pathInfo = explode('/', strtolower(trim($this->getRequest()->getPathInfo(), '/')));
+		$cacheKey = 'wp_blog_uri';
 		
-		if (count($pathInfo) == 0) {
-			return null;
+		if ($this->_isCached($cacheKey)) {
+			return $this->_cached($cacheKey);
 		}
 		
-		if ($pathInfo[0] != $this->getBlogRoute()) {
+		$pathInfo = strtolower(trim($this->getRequest()->getPathInfo(), '/'));	
+		
+		if ($this->getBlogRoute() && strpos($pathInfo, $this->getBlogRoute()) !== 0) {
 			return null;
 		}
 
-		// Remove blog route
-		array_shift($pathInfo);
+		$pathInfo = trim(substr($pathInfo, strlen($this->getBlogRoute())), '/');
+		
+		if ($pathInfo === '') {
+			return '';
+		}
+		
+		$pathInfo = explode('/', $pathInfo);
 		
 		// Clean off pager and feed parts
 		if (($key = array_search($this->getPostPagerVar(), $pathInfo)) !== false) {
@@ -76,12 +48,24 @@ class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 		}
 		
 		// Clean off feed and trackback variable
-		foreach(array($this->getFeedVar(), $this->getTrackbackVar()) as $var) {
-			if (($key = array_search($var, $pathInfo)) !== false) {
-				unset($pathInfo[$key]);
-				$pathInfo = array_values($pathInfo);
-				$this->getRequest()->setParam($var, 1);
+		if (($key = array_search($this->getFeedVar(), $pathInfo)) !== false) {
+			unset($pathInfo[$key]);
+			
+			if (isset($pathInfo[$key+1])) {
+				$type = $pathInfo[$key+1];
+				unset($pathInfo[$key+1]);
 			}
+			else {
+				$type = 'rss2';
+			}
+			
+			$this->getRequest()->setParam($this->getFeedVar(), $type);
+		}
+
+		if (($key = array_search($this->getTrackbackVar(), $pathInfo)) !== false) {
+			unset($pathInfo[$key]);
+			$pathInfo = array_values($pathInfo);
+			$this->getRequest()->setParam($this->getTrackbackVar(), 1);
 		}
 		
 		// Remove comments pager variable
@@ -100,29 +84,11 @@ class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 			array_shift($pathInfo);
 		}
 
-		return urldecode(implode('/', $pathInfo));
-	}
-	
-	/**
-	 * Determine whether the URI is a blog category URI with no base
-	 * Category URI's with a base are matched using a regular expression
-	 * In the router (static route)
-	 *
-	 * @param string
-	 * @return bool
-	 */
-	public function isNoBaseCategoryUri($uri)
-	{
-		if (!$this->categoryUrlHasBase()) {
-			$category = Mage::getModel('wordpress/post_category')->loadBySlugs(explode('/', $uri));
-			
-			if ($category->getUri()) {
-				Mage::register('wordpress_category', $category);
-				return true;
-			}		
-		}
+		$uri = urldecode(implode('/', $pathInfo));
 		
-		return false;
+		$this->_cache($cacheKey, $uri);
+		
+		return $uri;
 	}
 	
 	/**
@@ -137,6 +103,16 @@ class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 	}
 
 	/**
+	 * Retrieve the page ID set via the query string
+	 *
+	 * @return int|null
+	 */
+	public function getPageId()
+	{
+		return $this->getRequest()->getParam('page_id');
+	}
+	
+	/**
 	 * Determine whether the URI is a blog post attachment URI
 	 *
 	 * @param string $uri
@@ -146,175 +122,17 @@ class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 	{
 		return Mage::helper('wordpress/post')->isPostAttachmentUri($uri);
 	}
-	
-	/**
-	 * Determine whether the URI belongs to a term URI
-	 * taxonomy/slug
-	 *
-	 * @param string $uri
-	 * @return bool
-	 */
-	public function isTermUri($uri)
-	{
-		$parts = explode('/', $uri);
 
-		if (count($parts) === 2) {
-			$term = Mage::getModel('wordpress/term')->setTaxonomy($parts[0])
-				->loadBySlug($parts[1]);
-				
-			if ($term->getId() && !$term->isDefaultTerm()) {
-				Mage::register('wordpress_term', $term, true);
-				
-				return true;
-			}
-		}
 		
-		return false;
-	}
-	
-	/**
-	 * Determine whether the URL is a page URI
-	 *
-	 * @param string $uri
-	 * @return bool
-	 */
-	public function isPageUri($uri, $registerPage = true)
-	{
-		if (trim($uri) === '') {
-			return false;
-		}
-
-		$uris = explode('/', $uri);
-		$pages = array();
-		$count = 0;
-		
-		foreach($uris as $uri) {
-			$page = Mage::getModel('wordpress/page')->loadBySlug($uri);
-			
-			if (!$page->getId()) {
-				return false;
-			}
-			
-			if ($count++ > 0) {
-				$lastPage = end($pages);
-				$page->setParentPage($lastPage);
-				reset($pages);
-			}
-			else {
-				if ($page->getPostParent() > 0) {
-					return false;
-				}
-			}
-			
-			$pages[] = $page;
-		}
-		
-		if ($registerPage) {
-			Mage::register('wordpress_page', array_pop($pages), true);
-		}
-		
-		return true;
-	}
-	
-	/**
-	 * Trim the base from the URI
-	 *
-	 * @param string $uri
-	 * @param string $base
-	 * @param string $ltrim
-	 * @return string
-	 */
-	public function trimUriBase($uri, $base, $ltrim = '/')
-	{
-		if (substr($uri, 0, strlen($base)) === $base) {
-			$uri = substr($uri, strlen($base));
-			
-			if (!is_null($ltrim)) {
-				$uri = ltrim($uri, $ltrim);
-			}
-		}
-		
-		return $uri;
-	}
-	
-	/**
-	 * Retrieve the URI with the base portion trimmed off
-	 *
-	 * @param string $base
-	 * @param string $ltrim
-	 * @return string
-	 */
-	public function getTrimmedUri($base, $ltrim = '/')
-	{
-		return $this->trimUriBase($this->getBlogUri(), $base, $ltrim);
-	}
-
-	/**
-	 * Determine whether the category URL has a base
-	 *
-	 * @return bool
-	 */
-	public function categoryUrlHasBase()
-	{
-		$helper = Mage::helper('wordpress');
-
-		return !($helper->isPluginEnabled('No Category Base WPML') || $helper->isPluginEnabled('No Category Base'));
-	}
-	
-	/**
-	 * Retrieve the category base
-	 *
-	 * @return string
-	 */
-	public function getCategoryBase()
-	{
-		return trim(Mage::helper('wordpress')->getWpOption('category_base', 'category'), '/');
-	}
-	
-	/**
-	 * Trim the category base from the URI
-	 *
-	 * @param string $uri
-	 * @return string
-	 */
-	public function trimCategoryBaseFromUri($uri)
-	{
-		if ($this->categoryUrlHasBase()) {
-			return $this->trimUriBase($uri, $this->getCategoryBase());
-		}
-		
-		return $uri;
-	}
-	
-	/**
-	 * Retrieve the tag base
-	 *
-	 * @return string
-	 */
-	public function getTagBase()
-	{
-		$base = trim(Mage::helper('wordpress')->getWpOption('tag_base', 'tag'), '/');
-		
-		if (Mage::helper('wordpress')->isWordpressMU()) {
-			$find = 'blog/';
-			
-			if (substr($base, 0, strlen($find)) == $find) {
-				$base = substr($base, strlen($find));
-			}
-		}
-		
-		return $base;
-	}
-	
 	/**
 	 * Retrieve the Regex pattern used to identify a permalink string
 	 * Allows for inclusion of other locale characters
 	 *
 	 * @return string
 	 */
-	public function getPermalinkStringRegex()
+	public function getPermalinkStringRegex($extra = '')
 	{
-		return '[a-z0-9' . $this->getSpecialUriChars() . '_\-\.]{1,}';
+		return '[a-z0-9' . $this->getSpecialUriChars() . '_\-\.' . $extra . ']{1,}';
 	}
 
 	/**
@@ -326,9 +144,8 @@ class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 	{
 		$chars = array('‘', '’','“', '”', '–', '—', '`');
 		
-		if (Mage::helper('wordpress')->isCryllicLocaleEnabled()) {
-			$chars[] = '\p{Cyrillic}';
-		}
+		// Cryllic
+//		$chars[] = '\p{Cyrillic}';
 			
 		return implode('', $chars);	
 	}
@@ -340,7 +157,7 @@ class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 	 */
 	public function getCommentPagerVarFormat()
 	{
-		return $this->_commentPagerVarFormat;
+		return '^comment-page-%s$';
 	}
 	
 	/**
@@ -350,7 +167,7 @@ class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 	 */
 	public function getPostPagerVar()
 	{
-		return $this->_postPagerVar;
+		return 'page';
 	}
 	
 	/**
@@ -360,7 +177,7 @@ class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 	 */
 	public function getFeedVar()
 	{
-		return $this->_feedVar;
+		return 'feed';
 	}
 	
 	/**
@@ -370,7 +187,7 @@ class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 	 */
 	public function getTrackbackVar()
 	{
-		return $this->_trackbackVar;
+		return 'trackback';
 	}
 	
 	/**
@@ -382,4 +199,174 @@ class Fishpig_Wordpress_Helper_Router extends Fishpig_Wordpress_Helper_Abstract
 	{
 		return Mage::app()->getRequest();
 	}
+	
+	/**
+	 * Retrieve the search query variable name
+	 *
+	 * @return string
+	 */
+	public function getSearchVar()
+	{
+		return 's';
+	}
+	
+	/**
+	 * Retrieve the search route
+	 *
+	 * @return string
+	 */
+	public function getSearchRoute()
+	{
+		return 'search';
+	}
+	
+	/**
+	 * Retrieve the current search term
+	 *
+	 * @return string
+	 */
+	public function getSearchTerm($escape = false, $key = null)
+	{
+		if (is_null($key)) {
+			$searchTerm = $this->getRequest()->getParam($this->getSearchVar());
+		}
+		else {
+			$searchTerm = $this->getRequest()->getParam($key);
+		}
+		
+		return $escape
+			? Mage::helper('wordpress')->escapeHtml($searchTerm)
+			: $searchTerm;
+	}
+	
+	/**
+	 * Generate an array of URI's based on $results
+	 *
+	 * @param array $results
+	 * @return array
+	 */
+	public function generateRoutesFromArray($results, $prefix = '')
+	{
+		$objects = array();
+		$byParent = array();
+
+		foreach($results as $key => $result) {
+			if (!$result['parent']) {
+				$objects[$result['id']] = $result;
+			}
+			else {
+				if (!isset($byParent[$result['parent']])) {
+					$byParent[$result['parent']] = array();
+				}
+
+				$byParent[$result['parent']][$result['id']] = $result;
+			}
+		}
+		
+		if (count($objects) === 0) {
+			return false;
+		}
+
+		$routes = array();
+		
+		foreach($objects as $objectId => $object) {
+			if (($children = $this->_createArrayTree($objectId, $byParent)) !== false) {
+				$objects[$objectId]['children'] = $children;
+			}
+
+			$routes += $this->_createLookupTable($objects[$objectId], $prefix);
+		}
+		
+		return $routes;
+	}
+	
+	/**
+	 * Create a lookup table from an array tree
+	 *
+	 * @param array $node
+	 * @param string $idField
+	 * @param string $field
+	 * @param string $prefix = ''
+	 * @return array
+	 */
+	protected function _createLookupTable(&$node, $prefix = '')
+	{
+		if (!isset($node['id'])) {
+			return array();
+		}
+
+		$urls = array(
+			$node['id'] => ltrim($prefix . '/' . urldecode($node['url_key']), '/')
+		);
+
+		if (isset($node['children'])) {
+			foreach($node['children'] as $childId => $child) {
+				$urls += $this->_createLookupTable($child, $urls[$node['id']]);
+			}
+		}
+
+		return $urls;
+	}
+	
+	/**
+	 * Create an array tree. This is used for creating static URL lookup tables
+	 * for categories and pages
+	 *
+	 * @param int $id
+	 * @param array $pool
+	 * @param string $field = 'parent'
+	 * @return false|array
+	 */
+	protected function _createArrayTree($id, &$pool)
+	{
+		if (isset($pool[$id]) && $pool[$id]) {
+			$children = $pool[$id];
+			
+			unset($pool[$id]);
+			
+			foreach($children as $childId => $child) {
+				unset($children[$childId]['parent']);
+				if (($result = $this->_createArrayTree($childId, $pool)) !== false) {
+					$children[$childId]['children'] = $result;
+				}
+			}
+
+			return $children;
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * If a page is set as a custom homepage, get it's ID
+	 *
+	 * @return false|int
+	 */
+	public function getHomepagePageId()
+	{
+		if (Mage::helper('wordpress')->getWpOption('show_on_front') === 'page') {
+			if ($pageId = Mage::helper('wordpress')->getWpOption('page_on_front')) {
+				return $pageId;
+			}
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * If a page is set as a custom homepage, get it's ID
+	 *
+	 * @return false|int
+	 */
+	public function getBlogPageId()
+	{
+		if (Mage::helper('wordpress')->getWpOption('show_on_front') === 'page') {
+			if ($pageId = Mage::helper('wordpress')->getWpOption('page_for_posts')) {
+				return $pageId;
+			}
+		}
+		
+		return false;
+	}
+
 }

@@ -42,23 +42,32 @@ class Fishpig_Wordpress_Model_Post_Category extends Fishpig_Wordpress_Model_Term
 	{
 		return $this->getChildrenTerms();
 	}
+	
+	/**
+	 * Retrieve the parent category
+	 *
+	 * @return Fishpig_Wordpress_Model_Resource_Post_Category
+	 */
+	public function getParentCategory()
+	{
+		return $this->getParentTerm();
+	}
 
 	/**
-	 * Retrieve the URI for the category
-	 * This is a wrapper for the parent method and injects
-	 * the category base if WordPress is configured to use this
+	 * Retrieve the string that is prefixed to all category URI's
 	 *
-	 * @return string|false
+	 * @return string
 	 */
-	public function getUri()
+	public function getUriPrefix()
 	{
-		$helper = Mage::helper('wordpress/router');
-		$uri = substr(parent::getUri(), strlen($this->getTaxonomy())+1);
+		$helper = Mage::helper('wordpress');
 
-		if (!$helper->categoryUrlHasBase()) {
-			return $uri;
+		if ($helper->isPluginEnabled('No Category Base WPML') || $helper->isPluginEnabled('No Category Base')) {
+			return '';
 		}
 
-		return $helper->getCategoryBase() . '/' . $uri;
+		return ($base = trim($helper->getWpOption('category_base', 'category'), '/ ')) === ''
+			? $this->getTaxonomyType()
+			: $base;
 	}
 }

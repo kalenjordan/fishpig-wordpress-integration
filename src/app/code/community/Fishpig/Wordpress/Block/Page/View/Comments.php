@@ -9,34 +9,6 @@
 class Fishpig_Wordpress_Block_Page_View_Comments extends Fishpig_Wordpress_Block_Post_View_Comments
 {
 	/**
-	 * Block name for the comments form block
-	 *
-	 * @var string
-	 */
-	protected $_commentsFormBlockName = 'wordpress_page_comment_form';
-	
-	/**
-	 * Block type for the comments form block
-	 *
-	 * @var string
-	 */
-	protected $_commentsFormBlockType = 'wordpress/page_view_comment_form';
-	
-	/**
-	 * Name of the pager block
-	 *
-	 * @var string
-	 */
-	protected $_pagerBlockName = 'wordpress_page_comment_pager';
-
-	/**
-	 * Block type for the pager block
-	 *
-	 * @var string
-	 */	
-	protected $_pagerBlockType = 'wordpress/page_view_comment_pager';
-
-	/**
 	 * Retrieve the page object
 	 * This is overridden to save duplicating all post comment code
 	 *

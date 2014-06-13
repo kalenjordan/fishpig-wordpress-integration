@@ -24,6 +24,11 @@ class Fishpig_Wordpress_Block_Post_Associated_Products extends Mage_Catalog_Bloc
 					$attributes = Mage::getSingleton('catalog/config')->getProductAttributes();
 				}
 				
+				if ($this->getCount()) {
+					$collection->setPageSize($this->getCount())
+						->setCurPage(1);
+				}
+
 				return $collection->addAttributeToSelect($attributes);
 			}
 		}

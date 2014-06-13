@@ -13,10 +13,18 @@ class Fishpig_Wordpress_Model_Resource_Image_Collection extends Fishpig_Wordpres
 		$this->_init('wordpress/image');
 	}
 	
+	/**
+	 * Load an image
+	 * Ensure that only images are returned
+	 *
+	 * @param bool $printQuery
+	 * @param bool $logQuery
+	 * @return $this
+	 */
     public function load($printQuery = false, $logQuery = false)
     {
 		$this->getSelect()->where("post_mime_type LIKE 'image%'");
+		
 		return parent::load($printQuery, $logQuery);
     }
-
 }

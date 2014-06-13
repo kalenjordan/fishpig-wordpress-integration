@@ -45,7 +45,7 @@ abstract class Fishpig_Wordpress_Model_Resource_Post_Collection_Abstract extends
 	{
 		parent::_beforeLoad();
 
-		if (count($this->_postTypes) === 0) {
+		if (!$this->hasPostTypeFilter()) {
 			$this->_postTypes[] = $this->getNewEmptyItem()->getPostType();
 		}
 		
@@ -90,9 +90,23 @@ abstract class Fishpig_Wordpress_Model_Resource_Post_Collection_Abstract extends
 	 */
 	public function addPostTypeFilter($postTypes)
 	{
+		if (!is_array($postTypes) && strpos($postTypes, ',') !== false) {
+			$postTypes = explode(',', $postTypes);
+		}
+
 		$this->_postTypes = array_values(array_merge($this->_postTypes, (array)$postTypes));
 		
 		return $this;
+	}
+	
+	/**
+	 * Determine whether any post type filters exist
+	 *
+	 * @return bool
+	 */
+	public function hasPostTypeFilter()
+	{
+		return count($this->_postTypes) > 0;
 	}
 	
 	/**
@@ -101,7 +115,21 @@ abstract class Fishpig_Wordpress_Model_Resource_Post_Collection_Abstract extends
 	 */
 	public function addIsPublishedFilter()
 	{
-		return $this->addStatusFilter('publish');
+		return $this->addIsViewableFilter();
+	}
+	
+	/**
+	 * Filters the collection so that only posts that can be viewed are displayed
+	 *
+	 * @return $this
+	 */
+	public function addIsViewableFilter()
+	{
+		if (Mage::getSingleton('customer/session')->isLoggedIn()) {
+			return $this->addStatusFilter(array('publish', 'private', 'protected'));
+		}
+
+		return $this->addStatusFilter(array('publish', 'protected'));		
 	}
 	
 	/**
@@ -170,24 +198,25 @@ abstract class Fishpig_Wordpress_Model_Resource_Post_Collection_Abstract extends
 	 * @param array $fields - fields to search
 	 * @param string $operator
 	 */
-	public function addSearchStringFilter(array $words, array $fields, $operator)
+	public function addSearchStringFilter(array $words, array $fields)
 	{
 		if (count($words) > 0) {
-			$read = Mage::helper('wordpress/database')->getReadAdapter();
-			$where = array();
-	
-			foreach($fields as $field) {
-				foreach($words as $word) {
-					$where[] = $read->quoteInto("{$field} LIKE ? ", "%{$word}%");
+			foreach($words as $word) {
+				$conditions = array();
+
+				foreach($fields as $key => $field) {
+					$conditions[] = $this->getConnection()->quoteInto('`main_table`.`' . $field . '` LIKE ?', '%' . $word . '%');
 				}
+
+				$this->getSelect()->where(join(' ' . Zend_Db_Select::SQL_OR . ' ', $conditions));
 			}
-	
-			$this->getSelect()->where(implode(" {$operator} ", $where));
+			
+			$this->addFieldToFilter('post_password', '');
 		}
 		else {
 			$this->getSelect()->where('1=2');
 		}
-		
+
 		return $this;
 	}
 	

@@ -10,43 +10,19 @@
 <?php if ($post): ?>
 <p class="post-meta details">
 <?php if ($this->hasTags($post)): ?>
-	<?php echo $this->__('This entry was posted in %s and tagged %s on %s<span class=\"by-author\"> by %s</span>.', $this->getCategoryString($post), $this->getTagString($post), $post->getPostDate(), $post->getAuthor()->getDisplayName()) ?>
+	<?php echo stripslashes($this->__('This entry was posted in %s and tagged %s on %s<span class=\"by-author\"> by %s</span>.', $this->getCategoryString($post), $this->getTagString($post), $post->getPostDate(), $post->getAuthor()->getDisplayName())) ?>
 <?php else: ?>
-	<?php echo $this->__('This entry was posted in %s on %s<span class=\"by-author\"> by %s</span>.', $this->getCategoryString($post), $post->getPostDate(), $post->getAuthor()->getDisplayName()) ?>
+	<?php echo stripslashes($this->__('This entry was posted in %s on %s<span class=\"by-author\"> by %s</span>.', $this->getCategoryString($post), $post->getPostDate(), $post->getAuthor()->getDisplayName())) ?>
 <?php endif; ?>
-<?php if ($this->getIncludeNextPreviousLinks()): ?>
-	<?php if ($this->canDisplayPreviousNextLinks()): ?>
-	<span class="post-skips">
-		<?php if (($previous = $post->getPreviousPost()) !== false): ?>
-			<a href="<?php echo $previous->getPermalink() ?>" class="post-skip post-skip-previous" title="<?php echo $this->escapeHtml($previous->getPostTitle()) ?>">&larr; <?php echo $this->__('Previous Post') ?></a>
-		<?php endif; ?>
-		<?php if (($next = $post->getNextPost()) !== false): ?>
-			<a href="<?php echo $next->getPermalink() ?>" class="post-skip post-skip-next" title="<?php echo $this->escapeHtml($next->getPostTitle()) ?>"><?php echo $this->__('Next Post') ?> &rarr;</a>
-		<?php endif; ?>
-	</span>
+<?php if ($this->canDisplayPreviousNextLinks()): ?>
+<span class="post-skips">
+	<?php if (($previous = $post->getPreviousPost()) !== false): ?>
+		<a href="<?php echo $previous->getPermalink() ?>" class="post-skip post-skip-previous" title="<?php echo $this->escapeHtml($previous->getPostTitle()) ?>">&larr; <?php echo $this->__('Previous Post') ?></a>
 	<?php endif; ?>
+	<?php if (($next = $post->getNextPost()) !== false): ?>
+		<a href="<?php echo $next->getPermalink() ?>" class="post-skip post-skip-next right" title="<?php echo $this->escapeHtml($next->getPostTitle()) ?>"><?php echo $this->__('Next Post') ?> &rarr;</a>
+	<?php endif; ?>
+</span>
 <?php endif; ?>
 </p>
 <?php endif; ?>
-<?php return ?>
-
-
-				<?php $author = $post->getAuthor() ?>
-				<p class="post-meta details">
-	<?php $categories = $post->getParentCategories() ?>
-	<?php if (count($categories) > 0): ?>
-		<span><?php echo $this->__('Posted in') ?> </span> 
-		<?php $it = count($categories) ?>
-		<?php foreach($categories as $category): ?><a href="<?php echo $category->getUrl() ?>"><?php echo $category->getName() ?></a><?php if (--$it > 0): ?>, <?php endif; ?><?php endforeach; ?>
-	<?php endif; ?>
-	<?php $tags = $post->getTags() ?>
-	<?php if (count($tags) > 0): ?>
-		<span><?php echo (count($categories) == 0) ? $this->__('Tagged with') : $this->__('and tagged with') ?> </span> 
-		 <?php $it = count($tags) ?>
-		 <?php foreach($tags as $tag): ?>	<a href="<?php echo $tag->getUrl() ?>"><?php echo $this->escapeHtml($tag->getName()) ?></a><?php if (--$it > 0): ?>, <?php endif; ?><?php endforeach; ?>
-	<?php endif; ?>
-	<?php echo $this->__('by') ?> <a href="<?php echo $author->getUrl() ?>"><?php echo $this->escapeHtml($author->getDisplayName()) ?></a>. 
-	<?php if ($post->getCommentCount() > 0): ?>
-		<span><a href ="<?php echo $post->getPermalink() ?>#comments"><?php echo $post->getCommentCount() ?> <?php if ($post->getCommentCount() == 1): ?><?php echo $this->__('Reply') ?><?php else: ?><?php echo $this->__('Replies') ?><?php endif; ?></a></span>
-	<?php endif; ?>
-</p>

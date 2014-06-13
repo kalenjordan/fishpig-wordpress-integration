@@ -49,18 +49,33 @@ class Fishpig_Wordpress_TermController extends Fishpig_Wordpress_Controller_Abst
 		$term = Mage::registry('wordpress_term');
 		
 		$this->_addCustomLayoutHandles(array(
+			'wordpress_term_view',
 			'wordpress_term_index',
 			'wordpress_term',
+			'wordpress_post_list',
 		));
 			
 		$this->_initLayout();
 
-		$this->_rootTemplates[] = 'template_post_list';
+		$this->_rootTemplates[] = 'post_list';
 		
-		$this->_title($term->getName());
+#		$this->addCrumb('term_taxonomy', array('label' => $term->getTaxonomyLabel()));
 		
-		$this->addCrumb('term_taxonomy', array('label' => $term->getTaxonomyLabel()));
-		$this->addCrumb('term', array('label' => $term->getName()));
+		$tree = array($term);
+		$buffer = $term;
+		
+		while($buffer = $buffer->getParentTerm()) {
+			array_unshift($tree, $buffer);
+		}
+		
+		while($branch = array_shift($tree)) {
+			$this->addCrumb('term_' . $branch->getId(), array(
+				'link' => ($tree ? $branch->getUrl() : null), 
+				'label' => $branch->getName())
+			);
+
+			$this->_title($branch->getName());
+		}
 		
 		$this->renderLayout();
 	}
@@ -74,6 +89,20 @@ class Fishpig_Wordpress_TermController extends Fishpig_Wordpress_Controller_Abst
 	protected function _initTerm()
 	{
 		if (($term = Mage::registry('wordpress_term')) !== null) {
+			return $term;
+		}
+
+		$term = Mage::getModel('wordpress/term');
+		
+		if ($tax = $this->getRequest()->getParam('taxonomy')) {
+			$term->setTaxonomy($tax);
+		}
+		
+		$term->load($this->getRequest()->getParam('id'));
+
+		if ($term->getId()) {
+			Mage::register('wordpress_term', $term);
+
 			return $term;
 		}
 

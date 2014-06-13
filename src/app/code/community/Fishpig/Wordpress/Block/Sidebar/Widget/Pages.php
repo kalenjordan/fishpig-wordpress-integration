@@ -37,10 +37,11 @@ class Fishpig_Wordpress_Block_Sidebar_Widget_Pages extends Fishpig_Wordpress_Blo
 			$pages->addPostParentIdFilter(0);
 		}
 
-		$pages->addIsPublishedFilter();
+		$pages->addIsViewableFilter();
 		$pages->orderByMenuOrder();
+		$pages->setOrderByPostDate();
 		$pages->load();
-		
+
 		return $pages;
 	}
 	

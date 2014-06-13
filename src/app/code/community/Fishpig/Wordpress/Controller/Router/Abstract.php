@@ -6,15 +6,22 @@
  * @author      Ben Tideswell <help@fishpig.co.uk>
  */
 
-abstract class Fishpig_Wordpress_Controller_Router_Abstract extends Mage_Core_Controller_Varien_Router_Standard
+abstract class Fishpig_Wordpress_Controller_Router_Abstract extends Mage_Core_Controller_Varien_Router_Abstract
 {
+	/**
+	 * Callback methods used to generate possible routes
+	 *
+	 * @var array
+	 */
+	protected $_routeCallbacks = array();
+
 	/**
 	 * Stores the static routes used by WordPress
 	 *
 	 * @var array
 	 */
 	protected $_staticRoutes = array();
-	
+
 	/**
 	 * The name of the router for the extension
 	 * This is used to easily set routes and to define the router
@@ -22,23 +29,6 @@ abstract class Fishpig_Wordpress_Controller_Router_Abstract extends Mage_Core_Co
 	 * @var string
 	 */
 	protected $_frontendRouterName = 'wordpress';
-	
-	/**
-	 * Used to load controllers
-	 * We could look this up in the config cache, but hardcoding is quicker
-	 *
-	 * @var string
-	 */
-	protected $_controllerClassPrefix = 'Fishpig_Wordpress';
-
-	/**
-	 * Performs the logic for self::match
-	 * This is where the route is calculated
-	 *
-	 * @param string $uri
-	 * @return bool
-	 */
-	abstract protected function _match($uri);
 
 	/**
 	 * Create an instance of the router and add it to the queue
@@ -48,23 +38,17 @@ abstract class Fishpig_Wordpress_Controller_Router_Abstract extends Mage_Core_Co
 	 */	
 	public function initControllerObserver(Varien_Event_Observer $observer)
 	{
+		if (!$this->isEnabled()) {
+			return false;
+		}
+		
 		$routerClass = get_class($this);
 
-   	    $observer->getEvent()->getFront()
-   	    	->addRouter($this->_frontendRouterName, new $routerClass);
-   	    
+   	    $observer->getEvent()
+   	    	->getFront()
+   	    		->addRouter($this->_frontendRouterName, new $routerClass);
+
    	    return true;
-	}
-		
-	/**
-	 * Determine whether it is okay to try and match the route
-	 *
-	 * @return bool
-	 */
-	protected function _canMatchRoute()
-	{
-		return Mage::helper('wordpress')->isFullyIntegrated() 
-			&& Mage::app()->getStore()->getCode() !== 'admin';
 	}
 	
 	/**
@@ -77,208 +61,225 @@ abstract class Fishpig_Wordpress_Controller_Router_Abstract extends Mage_Core_Co
 	public function match(Zend_Controller_Request_Http $request)
 	{
 		try {
-			if ($this->_canMatchRoute()) {
-				if (($uri = Mage::helper('wordpress/router')->getBlogUri()) !== null) {
-					$this->_initStaticRoutes();
-
-					if (($staticRoute = $this->_matchStaticRoute($uri)) !== false) {
-						$this->setRoutePath($staticRoute);
-					}
-					else {
-						$this->_match($uri);
-					}
-					
-					if ($this->_hasValidRouteDetails()) {
-						$this->setRewriteAlias();
-
-						return $this->_dispatch();
-					}
-				}
+			if (!$this->_canMatch()) {
+				return false;
 			}
+			
+			if (($uri = Mage::helper('wordpress/router')->getBlogUri()) === null) {
+				return false;	
+			}
+
+			$this->_beforeMatch($uri);
+
+			if (($route = $this->_matchRoute($uri)) !== false) {
+				return $this->setRoutePath($route['path'], $route['params']);
+			}
+
+			Mage::dispatchEvent('wordpress_match_routes_after', array('router' => $this, 'uri' => $uri));
+
 		}
 		catch (Exception $e) { 
+			if (isset($_SERVER['fishpig'])) {
+				echo sprintf('<h1>%s</h1><pre>%s</pre>', $e->getMessage(), $e->getTraceAsString());
+				exit;
+			}
+
 			Mage::helper('wordpress')->log($e->getMessage());
 		}
 
-		return false;
+		return !is_null(Mage::app()->getRequest()->getModuleName())
+			&& !is_null(Mage::app()->getRequest()->getControllerName())
+			&& !is_null(Mage::app()->getRequest()->getActionName());
+	}
+
+	/**
+	 * Determine whether WP is available from the root
+	 *
+	 * @return bool
+	 */
+	protected function _isWordPressAtRoot()
+	{
+		$modules = (array)Mage::app()->getConfig()->getNode('modules');
+	
+		return isset($modules['FIshpig_Wordpress_Addon_Root'])
+			&& isset($modules['FIshpig_Wordpress_Addon_Root']['active']) === 'true';
 	}
 	
 	/**
-	 * Set the rewrite alias
-	 * This allows getUrl() to return the rewritten blog URL
+	 * Called before the route is matched
+	 * This can be used to add route callbacks
 	 *
 	 * @param string $uri
 	 * @return $this
 	 */
-	public function setRewriteAlias()
+	protected function _beforeMatch($uri)
 	{
-		$pageVar = Mage::helper('wordpress/router')->getPostPagerVar();		
-		$route = preg_replace('/\/(' . $pageVar . '\/[0-9]{1,}[\/]{0,1})/', '/', ltrim($this->getRequest()->getPathInfo(), '/'));
-
-		$this->getRequest()->setAlias(
-			Mage_Core_Model_Url_Rewrite::REWRITE_REQUEST_PATH_ALIAS,
-			$route
-		);
-
+		Mage::dispatchEvent('wordpress_match_routes_before', array('router' => $this, 'uri' => $uri));		
+		
 		return $this;
 	}
-	
+
 	/**
-	 * Quickly set the module, controller and action
+	 * Set the path and parameters ready for dispatch
 	 *
-	 * @param string $path
+	 * @param array $path
 	 * @param array $params = array
-	 * @return bool
+	 * @return $this
 	 */
 	public function setRoutePath($path, array $params = array())
 	{
-		Mage::dispatchEvent('wordpress_route_path_set', array('router' => $this, 'path' => $path, 'params' => $params));
-		
-		$parts = explode('/', $path);
-		
-		if (count($parts) === 3) {
-			list($module, $controller, $action) = $parts;
-			
-			if ($module === '*') {
-				$module = $this->_frontendRouterName;
-			}
+		if (is_string($path)) {
+			// Legacy
+			$path = explode('/', $path);
 
-			$this->getRequest()->setModuleName($module)
-				->setRouteName($module)
-				->setControllerName($controller)
-				->setActionName($action);
-        
-			foreach($params as $key => $value) {
-				$this->getRequest()->setParam($key, $value);
-			}
+			$path = array(
+				'module' => $path[0] === '*' ? $this->_frontendRouterName: $path[0],
+				'controller' => $path[1],
+				'action' => $path[2],
 			
-			return true;
+			);
 		}
+
+		$request = Mage::app()->getRequest();
+
+		$request->setModuleName($path['module'])
+			->setRouteName($path['module'])
+			->setControllerName($path['controller'])
+			->setActionName($path['action']);
+
+		foreach($params as $key => $value) {
+			$request->setParam($key, $value);
+		}
+
+		$helper = Mage::helper('wordpress/router');
 		
-		return false;
+		$request->setAlias(
+			Mage_Core_Model_Url_Rewrite::REWRITE_REQUEST_PATH_ALIAS,
+			ltrim($helper->getBlogRoute() . '/' . $helper->getBlogUri(), '/')
+		);
+
+		return true;
 	}
 	
 	/**
-	 * Determine whether valid route details have been set
+	 * Determine whether this module can try and match the URI
 	 *
 	 * @return bool
 	 */
-	protected function _hasValidRouteDetails()
+	protected function _canMatch()
 	{
-		$request = $this->getRequest();
-		
-		return $request->getModuleName() 
-			&& $request->getControllerName() 
-			&& $request->getActionName();
+		return Mage::helper('wordpress')->isFullyIntegrated() 
+			&& Mage::app()->getStore()->getCode() !== 'admin';
 	}
-
+	
 	/**
-	 * Dispatch the controller request
+	 * Execute callbacks and match generated routes against $uri
 	 *
-	 * @return bool
+	 * @param string $uri = ''
+	 * @return false|array
 	 */
-	protected function _dispatch()
+	protected function _matchRoute($uri = '')
 	{
-		$request = $this->getRequest();
+		$encodedUri = strtolower(str_replace('----slash----', '/', urlencode(str_replace('/', '----slash----', $uri))));
 		
-		if ($controllerClassName = $this->_validateControllerClassName($this->_controllerClassPrefix, $request->getControllerName())) {
-			$controllerInstance = new $controllerClassName($request, $this->getFront()->getResponse());
+		foreach($this->_routeCallbacks as $callback) {
+			$this->_staticRoutes = array();
 
-			if ($controllerInstance->hasAction($request->getActionName())) {
-				$request->setDispatched(true);
-				$controllerInstance->dispatch($request->getActionName());
-				return true;
+			if (call_user_func($callback, $uri, $this) !== false) {
+				foreach($this->_staticRoutes as $route => $data) {
+					$match = false;
+
+					if (substr($route, 0, 1) !== '/') {
+						$match = $route === $encodedUri || $route === $uri;
+					}
+					else {
+						if (preg_match($route, $uri, $matches)) {
+							$match = true;
+							
+							if (isset($data['pattern_keys']) && is_array($data['pattern_keys'])) {
+								array_shift($matches);
+								
+								if (!isset($data['params'])) {
+									$data['params'] = array();
+								}
+
+								foreach($matches as $match) {
+									if (($pkey = array_shift($data['pattern_keys'])) !== null) {
+										$data['params'][$pkey] = $match;
+									}
+								}	
+							}
+						}
+					}
+					
+					if ($match) {
+						if (isset($data['params']['__redirect_to'])) {
+							header('Location: ' . $data['params']['__redirect_to']);
+							exit;	
+						}
+						
+						return $data;
+					}
+				}	
 			}
 		}
 
 		return false;
 	}
 	
-	/**
-	 * Retrieve the controller class filename
-	 * This method allows Addon WP modules to use their own controller
-	 *
-	 * @param string $realModule
-	 * @param string $controller
-	 * @return string
-	 */
-	public function getControllerFileName($realModule, $controller)
-	{
-		if (substr_count($realModule, '_') > 1) {
-			return Mage::getModuleDir('controllers', $realModule)
-				 . DS . uc_words($controller, DS) . 'Controller.php';
-		}
 
-		return parent::getControllerFileName($realModule, $controller);
-	}
-	
 	/**
-	 * Initliase the static routes used by WordPress
+	 * Add a callback method to generate new routes
 	 *
-	 * @return $this
+	 * @param array
 	 */
-	protected function _initStaticRoutes()
+	public function addRouteCallback(array $callback)
 	{
-		Mage::dispatchEvent($this->_frontendRouterName . '_init_static_routes_after', array('router' => $this));
+		$this->_routeCallbacks[] = $callback;
 		
 		return $this;
 	}
 	
 	/**
-	 * Register a static route
+	 * Add a generated route and it's details
 	 *
-	 * @param string $route - internal token used by the controller
-	 * @param string $alias - route used in the URL
+	 * @param array|string $pattern
+	 * @param string $path
+	 * @param array|null $params = array()
+	 * @return $this
 	 */
-	public function addStaticRoute($pattern, $action = 'index', $controller = 'index', $module = '*')
+	public function addRoute($pattern, $path, $params = array())
 	{
+		if (is_array($pattern)) {
+			$keys = $pattern[key($pattern)];
+			$pattern = key($pattern);
+		}
+		else {
+			$keys = array();
+		}
+
+		$path = array_combine(array('module', 'controller', 'action'), explode('/', $path));
+		
+		if ($path['module'] === '*') {
+			$path['module'] = $this->_frontendRouterName;
+		}
+
 		$this->_staticRoutes[$pattern] = array(
-			'module' => $module,
-			'controller' => $controller,
-			'action' => $action,
+			'path' => $path,
+			'params' => $params,
+			'pattern_keys' => $keys,
 		);
 		
 		return $this;
 	}
 	
 	/**
-	 * Checks to see whether the URI matches any of the static routes
+	 * Determine whether to add routes
 	 *
-	 * @param string $uri
-	 * @return string
+	 * @return bool
 	 */
-	protected function _matchStaticRoute($uri)
-	{	
-		foreach($this->_staticRoutes as $pattern => $route) {
-			if (preg_match($pattern, $uri, $matches)) {
-				return implode('/', $route);
-			}
-		}
-		
-		return false;
-	}
-	
-	/**
-	 * Returns the current request object
-	 *
-	 * @return Zend_Controller_Request_Http
-	 */
-	public function getRequest()
+	public function isEnabled()
 	{
-		return Mage::app()->getRequest();
-	}
-	
-	/**
-	 * Set the controller clas prefix
-	 * This is used when loading a controller class
-	 *
-	 * @param string $prefix
-	 * @return $this
-	 */
-	public function setControllerClassPrefix($prefix)
-	{
-		$this->_controllerClassPrefix = $prefix;
-		
-		return $this;
+		return true;
 	}
 }

@@ -8,32 +8,38 @@
  
 class Fishpig_Wordpress_Model_Post extends Fishpig_Wordpress_Model_Post_Abstract
 {
+	public $ID;
+
 	/**
-	 * Prefix of model events names
+	 * Event data
 	 *
 	 * @var string
 	*/
 	protected $_eventPrefix = 'wordpress_post';
+	protected $_eventObject = 'post';
 	
 	/**
-	 * Parameter name in event
+	 * Set the model's resource
 	 *
-	 * In observe method you can use $observer->getEvent()->getObject() in this case
-	 *
-	 * @var string
-	*/
-	protected $_eventObject = 'post';
-
-	/**
-	 * Tag used to identify where to break the post content up for excerpt
-	 *
-	 * @var const string
+	 * @return void
 	 */
-	const TEASER_TAG = '<!--more-->';
-
 	public function _construct()
 	{
 		$this->_init('wordpress/post');
+	}
+
+	/**
+	 * Set the categories after loading
+	 *
+	 * @return $this
+	 */
+	protected function _afterLoad()
+	{
+		parent::_afterLoad();
+
+		$this->getResource()->preparePosts(array($this));
+		
+		return $this;
 	}
 
 	/**
@@ -43,11 +49,7 @@ class Fishpig_Wordpress_Model_Post extends Fishpig_Wordpress_Model_Post_Abstract
 	 */
 	public function getPermalink()
 	{
-		if (!$this->hasPermalink()) {
-			$this->setPermalink(Mage::helper('wordpress/post')->getPermalink($this));
-		}
-		
-		return $this->_getData('permalink');
+		return $this->getUrl();
 	}
 
 	/**
@@ -57,9 +59,28 @@ class Fishpig_Wordpress_Model_Post extends Fishpig_Wordpress_Model_Post_Abstract
 	 */
 	public function getUrl()
 	{
-		return $this->getPermalink();
+		if (!$this->hasUrl()) {
+			if ($this->hasPermalink()) {
+				$this->setUrl(Mage::helper('wordpress')->getUrl($this->_getData('permalink')));
+			}
+			else {
+				$this->setUrl($this->getGuid());
+			}
+		}
+		
+		return $this->_getData('url');
 	}
-	
+
+	/**
+	 * Retrieve the post GUID
+	 *
+	 * @return string
+	 */	
+	public function getGuid()
+	{
+		return Mage::helper('wordpress')->getUrl() . '?p=' . $this->getId();
+	}
+
 	/**
 	 * Retrieve the post excerpt
 	 * If no excerpt, try to shorten the post_content field
@@ -69,13 +90,10 @@ class Fishpig_Wordpress_Model_Post extends Fishpig_Wordpress_Model_Post_Abstract
 	public function getPostExcerpt($includeSuffix = true)
 	{
 		if (!$this->getData('post_excerpt')) {
-			if ($this->hasMoreTag()) {
-				$excerpt = $this->_getPostTeaser($includeSuffix);
-			}
-			else {
-				$excerpt = $this->getPostContent('excerpt');
-			}
-
+			$excerpt = $this->hasMoreTag()
+				? $this->_getPostTeaser($includeSuffix)
+				: $this->getPostContent('excerpt');
+				
 			$this->setPostExcerpt($excerpt);
 		}			
 
@@ -89,44 +107,39 @@ class Fishpig_Wordpress_Model_Post extends Fishpig_Wordpress_Model_Post_Abstract
 	 */
 	public function hasMoreTag()
 	{
-		return strpos($this->getPostContent('excerpt'), self::TEASER_TAG) !== false;
+		return strpos($this->getData('post_content'), '<!--more') !== false;
 	}
 	
 	/**
 	 * Retrieve the post teaser
-	 * This is the data from the post_content field upto to the TEASER_TAG
+	 * This is the data from the post_content field upto to the MORE_TAG
 	 *
 	 * @return string
 	 */
 	protected function _getPostTeaser($includeSuffix = true)
 	{
-		if (strpos($this->getPostContent(), self::TEASER_TAG) !== false) {
+		if ($this->hasMoreTag()) {
 			$content = $this->getPostContent('excerpt');
+
+			if (preg_match('/<!--more (.*)-->/', $content, $matches)) {
+				$anchor = $matches[1];
+				$split = $matches[0];
+			}
+			else {
+				$split = '<!--more-->';
+				$anchor = $this->_getTeaserAnchor();
+			}
 			
-			$excerpt = substr($content, 0, strpos($content, self::TEASER_TAG));
-			
-			if ($includeSuffix && $this->_getTeaserAnchor()) {
-				$excerpt .= sprintf(' <a href="%s" class="read-more">%s</a>', $this->getPermalink(), $this->_getTeaserAnchor());
+			$excerpt = trim(substr($content, 0, strpos($content, $split)));
+
+			if ($excerpt !== '' && $includeSuffix && $anchor) {
+				$excerpt .= sprintf(' <a href="%s" class="read-more">%s</a>', $this->getPermalink(), $anchor);
 			}
 			
 			return $excerpt;
 		}
 		
 		return null;
-	}
-
-	/**
-	 * Returns the parent category of the current post
-	 *
-	 * @return Fishpig_Wordpress_Model_Post_Category
-	 */
-	public function getParentCategory()
-	{
-		if (!$this->hasData('parent_category')) {
-			$this->setData('parent_category', $this->getParentCategories()->getFirstItem());
-		}
-		
-		return $this->getData('parent_category');
 	}
 	
 	/**
@@ -137,10 +150,10 @@ class Fishpig_Wordpress_Model_Post extends Fishpig_Wordpress_Model_Post_Abstract
 	public function getParentCategories()
 	{
 		if (!$this->hasData('parent_categories')) {
-			$this->setData('parent_categories', $this->getResource()->getParentCategories($this));
+			$this->setParentCategories($this->getResource()->getParentCategories($this));
 		}
 		
-		return $this->getData('parent_categories');
+		return $this->_getData('parent_categories');
 	}
 
 	/**
@@ -151,10 +164,10 @@ class Fishpig_Wordpress_Model_Post extends Fishpig_Wordpress_Model_Post_Abstract
 	public function getTags()
 	{
 		if (!$this->hasData('tags')) {
-			$this->setData('tags', $this->getResource()->getPostTags($this));
+			$this->setTags($this->getResource()->getPostTags($this));
 		}
 		
-		return $this->getData('tags');
+		return $this->_getData('tags');
 	}
 
 	/**
@@ -165,25 +178,7 @@ class Fishpig_Wordpress_Model_Post extends Fishpig_Wordpress_Model_Post_Abstract
 	protected function _getTeaserAnchor()
 	{
 		// Allows translation
-		return Mage::helper('wordpress')->__('Continue reading <span class=\"meta-nav\">&rarr;</span>');
-		
-		$teaserAnchor = trim(Mage::helper('wordpress')->htmlEscape(Mage::getStoreConfig('wordpress_blog/posts/more_anchor')));
-		
-		return $teaserAnchor ? $teaserAnchor : false;
-	}
-	
-	/**
-	 * Retrieve the amount of words to use in the auto-generated excerpt
-	 *
-	 * @return int
-	 */
-	public function getExcerptSize()
-	{
-		if (!$this->_getData('excerpt_size')) {
-			$this->setExcerptSize((int)Mage::getStoreConfig('wordpress_blog/posts/excerpt_size'));
-		}
-		
-		return $this->_getData('excerpt_size');
+		return stripslashes(Mage::helper('wordpress')->__('Continue reading <span class=\"meta-nav\">&rarr;</span>'));
 	}
 	
 	/**
@@ -197,7 +192,8 @@ class Fishpig_Wordpress_Model_Post extends Fishpig_Wordpress_Model_Post_Abstract
 			$this->setPreviousPost(false);
 			
 			$collection = Mage::getResourceModel('wordpress/post_collection')
-				->addIsPublishedFilter()
+				->addIsViewableFilter()
+				->addPostTypeFilter($this->getPostType())
 				->addPostDateFilter(array('lt' => $this->_getData('post_date')))
 				->setPageSize(1)
 				->setCurPage(1)
@@ -223,7 +219,8 @@ class Fishpig_Wordpress_Model_Post extends Fishpig_Wordpress_Model_Post_Abstract
 			$this->setNextPost(false);
 			
 			$collection = Mage::getResourceModel('wordpress/post_collection')
-				->addIsPublishedFilter()
+				->addIsViewableFilter()
+				->addPostTypeFilter($this->getPostType())
 				->addPostDateFilter(array('gt' => $this->_getData('post_date')))
 				->setPageSize(1)
 				->setCurPage(1)
@@ -236,5 +233,18 @@ class Fishpig_Wordpress_Model_Post extends Fishpig_Wordpress_Model_Post_Abstract
 		}
 		
 		return $this->_getData('next_post');
+	}
+	
+	/**
+	 * Get a collection of terms by the taxonomy
+	 *
+	 * @param string $taxonomy
+	 * @return Fishpig_Wordpress_Model_Resource_Term_Collection
+	 */
+	public function getTaxonomyCollection($taxonomy)
+	{
+		return Mage::getResourceModel('wordpress/term_collection')
+			->addTaxonomyFilter($taxonomy)
+			->addPostIdFilter($post->getId());
 	}
 }

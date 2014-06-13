@@ -2,20 +2,38 @@
 <config>
     <modules>
         <Fishpig_Wordpress>
-            <version>2.5.0.5</version>
+            <version>3.1.1.2</version>
         </Fishpig_Wordpress>
     </modules>
     <global>
 		<events>
+            <controller_front_init_before>
+                <observers>
+					<wordpress>
+						<type>singleton</type>
+						<class>Fishpig_Wordpress_Controller_Router</class>
+						<method>initControllerBeforeObserver</method>
+					</wordpress>
+                </observers>
+            </controller_front_init_before>
             <controller_front_init_routers>
                 <observers>
-					<wp_initRouter>
+					<wordpress>
 						<type>singleton</type>
 						<class>Fishpig_Wordpress_Controller_Router</class>
 						<method>initControllerObserver</method>
-					</wp_initRouter>
+					</wordpress>
                 </observers>
             </controller_front_init_routers>
+            <sitemap_sitemap_save_before>
+                <observers>
+					<wordpress>
+						<type>singleton</type>
+						<class>wordpress/observer</class>
+						<method>injectXmlSitemapLinksObserver</method>
+					</wordpress>
+                </observers>
+            </sitemap_sitemap_save_before>
         </events>
 		<blocks>
 			<wordpress>
@@ -26,39 +44,38 @@
 			<wordpress>
 				<class>Fishpig_Wordpress_Model</class>
 				<resourceModel>wordpress_resource</resourceModel>
-				<deprecatedNode>wordpress_mysql4</deprecatedNode>
 			</wordpress>
 			<wordpress_resource>
 				<class>Fishpig_Wordpress_Model_Resource</class>
 				<entities>
+					<!-- Magento Tables -->
 					<association><table>wordpress_association</table></association>
 					<association_type><table>wordpress_association_type</table></association_type>
+					<!-- WordPress tables -->
+					<post><table>posts</table></post>
+					<page><table>posts</table></page>
+					<post_meta><table>postmeta</table></post_meta>
+					<page_meta><table>postmeta</table></page_meta>
 					<post_comment><table>comments</table></post_comment>
 					<post_comment_meta><table>commentmeta</table></post_comment_meta>
-					<link><table>links</table></link>
-					<option><table>options</table></option>
-					<post_meta><table>postmeta</table></post_meta>
-					<!-- Remove this -->
-					<postmeta><table>postmeta</table></postmeta>
-					<!-- endof -->		
-					<post><table>posts</table></post>
+					<post_category><table>terms</table></post_category>
+					<post_tag><table>terms</table></post_tag>
 					<term><table>terms</table></term>
 					<term_relationship><table>term_relationships</table></term_relationship>
 					<term_taxonomy><table>term_taxonomy</table></term_taxonomy>
+					<option><table>options</table></option>
 					<menu><table>terms</table></menu>
 					<menu_item><table>posts</table></menu_item>
 					<user_meta><table>usermeta</table></user_meta>
 					<user><table>users</table></user>
-					<!-- Extra entities not part of WordPress but required for extension -->
-					<page><table>posts</table></page>
-					<post_category><table>terms</table></post_category>
-					<link_category><table>terms</table></link_category>
 					<image><table>posts</table></image>
-					<post_tag><table>terms</table></post_tag>
-					<admin_user><table>wordpress_autologin</table></admin_user>
-					<!-- endof -->
 				</entities>
 			</wordpress_resource>
+			<sitemap>
+				<rewrite>
+					<sitemap>Fishpig_Wordpress_Model_Sitemap_Sitemap</sitemap>
+				</rewrite>
+			</sitemap>
 		</models>
 		<helpers>
 			<wordpress>
@@ -79,10 +96,8 @@
 			<wordpress_setup>
 				<setup>
 					<module>Fishpig_Wordpress</module>
+					<class>Fishpig_Wordpress_Model_Resource_Setup</class>
 				</setup>
-				<connection>
-					<use>core_setup</use>
-				</connection>
 			</wordpress_setup>
 		</resources>
 	</global>
@@ -125,6 +140,15 @@
 		</routers>
 	</frontend>
 	<adminhtml>
+		<translate>
+			<modules>
+				<Fishpig_Wordpress>
+					<files>
+						<default>Fishpig_Wordpress.csv</default>
+					</files>
+				</Fishpig_Wordpress>
+			</modules>
+		</translate>
 		<layout>
 			<updates>
 				<wordpress>
@@ -177,114 +201,64 @@
 		<wordpress>
 			<module>
 				<enabled>1</enabled>
-				<thankyou>0</thankyou>
 			</module>
 			<database>
-				<is_different_db>0</is_different_db>
-				<host/>
-				<username/>
-				<password/>
-				<dbname/>
+				<is_shared>1</is_shared>
 				<charset>utf8</charset>
 				<table_prefix>wp_</table_prefix>
 			</database>
 			<integration>
-				<full>0</full>
+				<full>1</full>
 				<route>blog</route>
+				<path>wp</path>
+				<remove_trailing_slash>1</remove_trailing_slash>
 			</integration>
-			<debug>
-				<log_enabled>0</log_enabled>
-			</debug>
-		</wordpress>
-		<wordpress_blog>
-			<layout>
-				<include_css>0</include_css>
-				<toplink_enabled>1</toplink_enabled>
-				<toplink_label>Blog</toplink_label>
-				<toplink_position>100</toplink_position>
-			</layout>
-			<posts>
-				<autop>1</autop>
-				<more_anchor>Continue Reading</more_anchor>
-				<display_previous_next>1</display_previous_next>
-				<opengraph>1</opengraph>
-			</posts>
-			<search>
+			<toplink>
 				<enabled>1</enabled>
-				<search_base>search</search_base>
-				<use_seo_urls>1</use_seo_urls>
-				<default_input_value>Search Posts</default_input_value>
-				<logical_operator>or</logical_operator>
-				<searchable_fields>post_title,post_content,post_excerpt</searchable_fields>
-				<max_search_words>8</max_search_words>
-				<min_word_length>3</min_word_length>
-			</search>
-			<tag_cloud>
-				<max_tags_to_display>20</max_tags_to_display>
-				<font_size_below_25>90</font_size_below_25>
-				<font_size_below_50>100</font_size_below_50>
-				<font_size_below_75>120</font_size_below_75>
-				<font_size_below_90>140</font_size_below_90>
-				<font_size_below_100>150</font_size_below_100>
-			</tag_cloud>
-			<locale>
-				<cyrillic_enabled>0</cyrillic_enabled>
-			</locale>
-		</wordpress_blog>
-		<sitemap>
-			<wordpress_homepage>
-				<changefreq>daily</changefreq>
-				<priority>1</priority>
-			</wordpress_homepage>
-			<wordpress_post>
-				<changefreq>weekly</changefreq>
-				<priority>0.8</priority>
-			</wordpress_post>
-			<wordpress_page>
-				<changefreq>weekly</changefreq>
-				<priority>0.5</priority>
-			</wordpress_page>
-		</sitemap>
+				<label>Blog</label>
+				<position>100</position>
+			</toplink>
+			<misc>
+				<include_css>1</include_css>
+				<autop>1</autop>
+			</misc>
+		</wordpress>
+		<web>
+			<routers>
+				<wordpress_addon>
+					<area>frontend</area>
+					<class>Fishpig_Wordpress_Controller_Router_Addon</class>
+				</wordpress_addon>
+			</routers>
+		</web>
 	</default>
 	<wordpress>
 		<database>
 			<before_connect>
 				<tables>
+					<post><table>posts</table></post>
+					<page><table>posts</table></page>
+					<post_meta><table>postmeta</table></post_meta>
+					<page_meta><table>postmeta</table></page_meta>
 					<post_comment><table>comments</table></post_comment>
 					<post_comment_meta><table>commentmeta</table></post_comment_meta>
-					<link><table>links</table></link>
+					<post_category><table>terms</table></post_category>
+					<post_tag><table>terms</table></post_tag>
 					<option><table>options</table></option>
-					<post_meta><table>postmeta</table></post_meta>
-					<!-- Remove this -->
-					<postmeta><table>postmeta</table></postmeta>
-					<!-- endof -->		
-					<post><table>posts</table></post>
 					<term><table>terms</table></term>
 					<term_relationship><table>term_relationships</table></term_relationship>
 					<term_taxonomy><table>term_taxonomy</table></term_taxonomy>
 					<menu><table>terms</table></menu>
 					<menu_item><table>posts</table></menu_item>
-					<user_meta><table>usermeta</table></user_meta>
 					<user><table>users</table></user>
-					<!-- Extra entities not part of WordPress but required for extension -->
-					<page><table>posts</table></page>
-					<post_category><table>terms</table></post_category>
-					<link_category><table>terms</table></link_category>
+					<user_meta><table>usermeta</table></user_meta>
 					<image><table>posts</table></image>
-					<post_tag><table>terms</table></post_tag>
-					<!-- endof -->
 				</tables>
 			</before_connect>
-			<after_connect>
-				<tables>
-					<yarpp_related><table>yarpp_related_cache</table></yarpp_related>
-					<yarpp_keyword><table>yarpp_keyword_cache</table></yarpp_keyword>
-				</tables>
-			</after_connect>
 		</database>
 		<sidebar>
 			<widgets>
-				<search><block>sidebar_widget_search</block><template>wordpress/sidebar/widget/search.phtml</template></search>
+				<search><block>sidebar_widget_search</block></search>
 				<pages><block>sidebar_widget_pages</block><template>wordpress/sidebar/widget/pages.phtml</template></pages>
 				<recent-posts><block>sidebar_widget_posts</block><template>wordpress/sidebar/widget/posts.phtml</template></recent-posts>
 				<recent-comments><block>sidebar_widget_comments</block><template>wordpress/sidebar/widget/comments.phtml</template></recent-comments>
@@ -292,60 +266,35 @@
 				<categories><block>sidebar_widget_categories</block><template>wordpress/sidebar/widget/categories.phtml</template></categories>
 				<tag_cloud><block>sidebar_widget_tagcloud</block><template>wordpress/sidebar/widget/tagcloud.phtml</template></tag_cloud>
 				<text><block>sidebar_widget_text</block><template>wordpress/sidebar/widget/text.phtml</template></text>
-				<links><block>sidebar_widget_links</block><template>wordpress/sidebar/widget/links.phtml</template></links>
 				<meta><block>sidebar_widget_meta</block><template>wordpress/sidebar/widget/meta.phtml</template></meta>
+				<rss><block>sidebar_widget_rss</block><template>wordpress/sidebar/widget/rss.phtml</template></rss>
+				<nav_menu><block>sidebar_widget_menu</block><template>wordpress/sidebar/widget/menu.phtml</template></nav_menu>
+				<calendar><block>sidebar_widget_calendar</block></calendar>
 				<categoryposts><block>sidebar_widget_posts</block><template>wordpress/sidebar/widget/categoryposts.phtml</template></categoryposts>
-				<twitter><block>sidebar_widget_twitterpro</block><template>wordpress/sidebar/widget/twitter-pro.phtml</template></twitter>
-				<facebooklikebox><block>sidebar_widget_facebooklikebox</block></facebooklikebox>
-				<rss><block>sidebar_widget_rss</block><template>wordpress/sidebar/widget/rss.phtml</template></rss>
-				<rss><block>sidebar_widget_rss</block><template>wordpress/sidebar/widget/rss.phtml</template></rss>
-				<yarpp_widget><block>sidebar_widget_yarpp</block><template>wordpress/sidebar/widget/yarpp.phtml</template></yarpp_widget>
+				<widget_sp_image><block>sidebar_widget_image</block></widget_sp_image>
 			</widgets>
 		</sidebar>
-		<autologin>
-			<urls>
-				<default>index.php</default>
-				<posts>edit.php</posts>
-				<post-new>post-new.php</post-new>
-				<category>edit-tags.php?taxonomy=category</category>
-				<post_tag>edit-tags.php?taxonomy=post_tag</post_tag>
-				<media>upload.php</media>
-				<links>link-manager.php</links>
-				<pages>edit.php?post_type=page</pages>
-				<comments>edit-comments.php</comments>
-				<appearance>themes.php</appearance>
-				<plugins>plugins.php</plugins>
-				<users>users.php</users>
-				<tools>tools.php</tools>
-				<options-general>options-general.php</options-general>
-				<options-writing>options-writing.php</options-writing>
-				<options-reading>options-reading.php</options-reading>
-				<options-discussion>options-reading.php</options-discussion>
-				<options-media>options-media.php</options-media>
-				<options-privacy>options-privacy.php</options-privacy>
-				<options-permalink>options-permalink.php</options-permalink>
-			</urls>
-		</autologin>
+		<post>
+			<types>
+				<post>
+					<taxonomies>category,post_tag</taxonomies>
+				</post>
+				<page>
+					<hierarchical>1</hierarchical>
+				</page>
+			</types>
+		</post>
+		<taxonomy>
+			<category>
+				<label>Categories</label>
+				<singular_label>Category</singular_label>
+				<hierarchical>1</hierarchical>
+			</category>
+			<post_tag>
+				<label>Tags</label>
+				<singular_label>Tag</singular_label>
+				<hierarchical>0</hierarchical>
+			</post_tag>
+		</taxonomy>
 	</wordpress>
-	<unit>
-		<models>
-			<wordpress>
-				<image />
-				<link />
-				<option />
-				<page />
-				<post />
-				<post_category />
-				<post_comment />
-				<post_tag />
-				<menu />
-				<menu_item />
-				<term />
-				<user />
-			</wordpress>
-		</models>
-		<dirs>
-			<WordPressIntegration>app/code/community/Fishpig/Wordpress</WordPressIntegration>
-		</dirs>
-	</unit>
 </config>

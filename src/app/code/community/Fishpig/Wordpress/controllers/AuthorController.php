@@ -25,16 +25,42 @@ class Fishpig_Wordpress_AuthorController extends Fishpig_Wordpress_Controller_Ab
 	  */
 	public function viewAction()
 	{
-		$author = Mage::registry('wordpress_author');
+		$author = $this->_initAuthor();
 		
 		$this->_addCustomLayoutHandles(array(
+			'wordpress_author_view', 
+			'wordpress_post_list',
 			'wordpress_author_view_' . $author->getId(),
-			'wordpress_author_index', 
 		));
 			
 		$this->_initLayout();
 		
-		$this->_rootTemplates[] = 'template_post_list';
+		$this->_rootTemplates[] = 'post_list';
+	
+		$this->_title($author->getDisplayName());
+		$this->addCrumb('author_nolink', array('label' => $this->__('Author')));
+		$this->addCrumb('author', array('link' => $author->getUrl(), 'label' => $author->getDisplayName()));
+
+		$this->renderLayout();
+	}
+
+	/**
+	 * Display the author bio
+	 *
+	 * @return void
+	 */
+	public function bioAction()
+	{
+		$author = $this->_initAuthor();
+		
+		$this->_addCustomLayoutHandles(array(
+			'wordpress_author_bio', 
+			'wordpress_author_bio_' . $author->getId(),
+		));
+			
+		$this->_initLayout();
+		
+		$this->_rootTemplates[] = 'author_bio';
 	
 		$this->_title($author->getDisplayName());
 		$this->addCrumb('author_nolink', array('label' => $this->__('Author')));
@@ -54,17 +80,11 @@ class Fishpig_Wordpress_AuthorController extends Fishpig_Wordpress_Controller_Ab
 			return $author;
 		}
 
-		$uri = Mage::helper('wordpress/router')->getBlogUri();
-		$base = 'author';
-		
-		if (substr($uri, 0, strlen($base)) == $base) {
-			$uri = trim(substr($uri, strlen($base)), '/');
-		}
-
-		$author = Mage::getModel('wordpress/user')->load($uri, 'user_nicename');
+		$author = Mage::getModel('wordpress/user')->load($this->getRequest()->getParam('author'), 'user_nicename');
 
 		if ($author->getId()) {
 			Mage::register('wordpress_author', $author);
+
 			return $author;
 		}
 		

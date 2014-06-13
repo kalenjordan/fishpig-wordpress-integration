@@ -9,6 +9,7 @@
 <?php $post = $this->getPost() ?>
 <div class="post-list-item">
 	<h2><a href="<?php echo $post->getPermalink() ?>" title="<?php echo $this->escapeHtml($post->getPostTitle()) ?>"><?php echo $this->escapeHtml($post->getPostTitle()) ?></a></h2>
+	<?php echo $this->getBeforePostContentHtml() ?>
 	<div class="post-entry entry<?php if ($post->getFeaturedImage): ?> post-entry-with-image<?php endif; ?>">
 		<?php if ($post->isViewableForVisitor()): ?>
 			<?php if ($featuredImage = $post->getFeaturedImage()): ?>
@@ -25,8 +26,5 @@
 			<?php echo $this->getPasswordProtectHtml($post) ?>
 		<?php endif; ?>
 	</div>
-	<?php echo $this->getMetaBlock()->setPost($post)->toHtml() ?>
-	<?php if ($this->helper('wordpress/plugin_shareThis')->canDisplayOnPost()): ?>
-		<div class="sharethis-icons" id="sharethis-icons-<?php echo $post->getId() ?>"><?php echo $this->helper('wordpress/plugin_shareThis')->getIcons($post) ?></div>
-	<?php endif; ?>
+	<?php echo $this->getAfterPostContentHtml() ?>
 </div>

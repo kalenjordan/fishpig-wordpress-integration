@@ -6,7 +6,7 @@
  * @author      Ben Tideswell <help@fishpig.co.uk>
  */
 
-class Fishpig_Wordpress_Block_Page_View extends Mage_Core_Block_Template
+class Fishpig_Wordpress_Block_Page_View extends Fishpig_Wordpress_Block_Abstract
 {
 	/**
 	 * Returns the currently loaded page model
@@ -15,7 +15,9 @@ class Fishpig_Wordpress_Block_Page_View extends Mage_Core_Block_Template
 	 */
 	public function getPage()
 	{
-		return Mage::registry('wordpress_page');
+		return $this->_getData('page')
+			? $this->_getData('page')
+			: Mage::registry('wordpress_page');
 	}
 
 	
@@ -28,20 +30,6 @@ class Fishpig_Wordpress_Block_Page_View extends Mage_Core_Block_Template
 	{
 		return $this->getChildHtml('comments');
 	}
-	
-	/**
-	 * Gets the comments block
-	 *
-	 * @return Fishpig_Wordpress_Block_Post_View_Comments
-	 */
-	public function getCommentsBlock()
-	{
-		if (!$this->getChild('comments')) {
-			$this->setChild('comments', $this->getLayout()->createBlock('wordpress/post_view_comments'));
-		}
-		
-		return $this->getChild('comments');
-	}
 
 	/**
 	 * Setup the comments block
@@ -49,7 +37,7 @@ class Fishpig_Wordpress_Block_Page_View extends Mage_Core_Block_Template
 	 */
 	protected function _beforeToHtml()
 	{
-		if ($commentsBlock = $this->getCommentsBlock()) {
+		if (($commentsBlock = $this->getChild('comments')) !== false) {
 			$commentsBlock->setPost($this->getPage());
 		}
 		
@@ -65,8 +53,10 @@ class Fishpig_Wordpress_Block_Page_View extends Mage_Core_Block_Template
 	{
 		if (!$this->hasPasswordProtectHtml()) {
 			$block = $this->getLayout()
-				->createBlock('core/template')
-				->setTemplate('wordpress/page/protected.phtml')
+				->createBlock('wordpress/template')
+				->setTemplate('wordpress/protected.phtml')
+				->setEntityType('page')
+				->setPost($this->getPage())
 				->setPage($this->getPage());
 					
 			$this->setPasswordProtectHtml($block->toHtml());

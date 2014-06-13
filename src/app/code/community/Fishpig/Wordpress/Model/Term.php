@@ -13,8 +13,8 @@ class Fishpig_Wordpress_Model_Term extends Fishpig_Wordpress_Model_Abstract
 	 *
 	 * @var string
 	 */
-	protected $_eventPrefix      = 'wordpress_term';
-	protected $_eventObject      = 'term';
+	protected $_eventPrefix = 'wordpress_term';
+	protected $_eventObject = 'term';
 	
 	public function _construct()
 	{
@@ -78,25 +78,6 @@ class Fishpig_Wordpress_Model_Term extends Fishpig_Wordpress_Model_Abstract
 	}
 	
 	/**
-	 * Retrieve the path for the term
-	 *
-	 * @return string
-	 */
-	public function getPath()
-	{
-		if (!$this->hasPath()) {
-			if ($this->getParentTerm()) {
-				$this->setPath($this->getParentTerm()->getPath() . '/' . $this->getId());
-			}
-			else {
-				$this->setPath($this->getId());
-			}
-		}
-		
-		return $this->_getData('path');
-	}
-	
-	/**
 	 * Retrieve a collection of children terms
 	 *
 	 * @return Fishpig_Wordpress_Model_Mysql_Term_Collection
@@ -120,7 +101,7 @@ class Fishpig_Wordpress_Model_Term extends Fishpig_Wordpress_Model_Abstract
 		if (!$this->hasPostCollection()) {
 			if ($this->getTaxonomy()) {
 				$posts = $this->_getObjectResourceModel()
-    				->addIsPublishedFilter()
+    				->addIsViewableFilter()
     				->addTermIdFilter($this->getId(), $this->getTaxonomy());
     			
 	    		$this->setPosts($posts);
@@ -129,7 +110,7 @@ class Fishpig_Wordpress_Model_Term extends Fishpig_Wordpress_Model_Abstract
     	
     	return $this->_getData('posts');
     }
-    
+  
 	/**
 	 * Retrieve the object resource model
 	 *
@@ -137,9 +118,9 @@ class Fishpig_Wordpress_Model_Term extends Fishpig_Wordpress_Model_Abstract
 	 */    
     protected function _getObjectResourceModel()
     {
-	    return Mage::getResourceModel('wordpress/post_collection');
+    	return parent::getPostCollection();
     }
-    
+      
 	/**
 	 * Retrieve the numbers of items that belong to this term
 	 *
@@ -162,32 +143,15 @@ class Fishpig_Wordpress_Model_Term extends Fishpig_Wordpress_Model_Abstract
 	}
 	
 	/**
-	 * Load a term by an array of slugs
-	 * If the slugs match a category URI
-	 * The most child term will be returned
-	 *
-	 * @param array $slugs
-	 * @return Fishpig_Wordpress_Model_Term
-	 */
-	public function loadBySlugs(array $slugs)
-	{
-		$this->getResource()->loadBySlugs($slugs, $this);
-		
-		return $this;
-	}
-	
-	/**
 	 * Retrieve the parent ID
 	 *
 	 * @return int|false
 	 */	
 	public function getParentId()
 	{
-		if ($this->_getData('parent')) {
-			return $this->_getData('parent');
-		}
-		
-		return false;
+		return $this->_getData('parent')
+			? $this->_getData('parent')
+			: false;
 	}
 	
 	/**
@@ -208,7 +172,7 @@ class Fishpig_Wordpress_Model_Term extends Fishpig_Wordpress_Model_Abstract
 	public function getUrl()
 	{
 		if (!$this->hasUrl()) {
-			$this->setUrl(Mage::helper('wordpress')->getUrl($this->getUri() . '/'));
+			$this->setUrl(Mage::helper('wordpress')->getUrl($this->getUriPrefix() . '/' . $this->getUri() . '/'));
 		}
 		
 		return $this->_getData('url');
@@ -223,45 +187,30 @@ class Fishpig_Wordpress_Model_Term extends Fishpig_Wordpress_Model_Abstract
 	 */
 	public function getUri()
 	{
-		if (($tree = $this->getTermTree()) !== false) {
-			$uri = array();
-			
-			foreach($tree as $branch) {
-				$uri[] = $branch->getSlug();
-			}
-
-			return $this->getTaxonomy() . '/' . implode('/', $uri);		
+		if (!$this->hasUri()) {
+			$this->setUri($this->getResource()->getTermUri($this));
 		}
 		
-		return false;
+		return $this->_getData('uri');
 	}
 	
 	/**
-	 * Retrieve an array of parent terms
-	 * The first element of the array is the most parent term
-	 * The last element of the array is $this
+	 * Retrieve all of the URI's for this taxonomy type
 	 *
-	 * @return false|array
-	 */	
-	public function getTermTree()
+	 * @return string
+	 */
+	public function getAllUris()
 	{
-		if (!$this->hasTermTree()) {
-			if ($this->getParentTerm()) {
-				$term = $this;
-				$terms = array();
+		return $this->getResource()->getUrisByTaxonomy($this->getTaxonomyType());
+	}
 	
-				do {
-					$terms[] = $term;
-					$term = $term->getParentTerm();
-				} while ($term);
-				
-				$this->setTermTree(array_reverse($terms));
-			}
-			else {
-				$this->setTermTree(array($this));
-			}
-		}
-		
-		return $this->_getData('term_tree');
+	/**
+	 * Retrieve the 	URI prefix for all URL's
+	 *
+	 * @return string
+	 */
+	public function getUriPrefix()
+	{
+		return $this->getTaxonomyType();
 	}
 }

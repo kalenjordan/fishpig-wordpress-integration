@@ -33,7 +33,7 @@ class Fishpig_Wordpress_Helper_Associations extends Fishpig_Wordpress_Helper_Abs
 		if (count($associations) > 0) {
 			return Mage::getResourceModel('wordpress/post_collection')
 				->addFieldToFilter('ID', array('IN' => $associations))
-				->addIsPublishedFilter();
+				->addIsViewableFilter();
 		}
 		
 		return false;
@@ -58,7 +58,7 @@ class Fishpig_Wordpress_Helper_Associations extends Fishpig_Wordpress_Helper_Abs
 		if (count($associations) > 0) {
 			return Mage::getResourceModel('wordpress/post_collection')
 				->addFieldToFilter('ID', array('IN' => $associations))
-				->addIsPublishedFilter();
+				->addIsViewableFilter();
 		}
 		
 		return false;
@@ -88,6 +88,10 @@ class Fishpig_Wordpress_Helper_Associations extends Fishpig_Wordpress_Helper_Abs
 			$collection = Mage::getResourceModel('catalog/product_collection');
 				
 			Mage::getSingleton('catalog/product_visibility')->addVisibleInCatalogFilterToCollection($collection);
+			
+			if (!Mage::getStoreConfigFlag('cataloginventory/options/show_out_of_stock')) {
+				Mage::getSingleton('cataloginventory/stock')->addInStockFilterToCollection($collection);
+			}
 
 			$collection->addAttributeToFilter('status', 1);
 			$collection->addAttributeToFilter('entity_id', array('in' => $associations));

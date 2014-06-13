@@ -8,6 +8,14 @@
 
 class Fishpig_Wordpress_Model_Page extends Fishpig_Wordpress_Model_Post_Abstract
 {
+	/**
+	 * Event data
+	 *
+	 * @var string
+	*/
+	protected $_eventPrefix = 'wordpress_page';
+	protected $_eventObject = 'page';
+	
 	public function _construct()
 	{
 		$this->_init('wordpress/page');
@@ -104,19 +112,25 @@ class Fishpig_Wordpress_Model_Page extends Fishpig_Wordpress_Model_Post_Abstract
 	 */
 	public function getMenuLabel()
 	{
-		if ($menuLabel = $this->getMetaValue('_aioseop_menulabel')) {
-			return $menuLabel;
-		}
-		
 		return $this->getPostTitle();
 	}
 	
+	/**
+	 * Determine it is the homepage
+	 *
+	 * @return bool
+	 */	
 	public function isHomepage()
 	{
 		return Mage::helper('wordpress')->getWpOption('show_on_front') == 'page'
 			&& Mage::helper('wordpress')->getWpOption('page_on_front', false) == $this->getId();	
 	}
 	
+	/**
+	 * Determine whether it is the blog post listing page
+	 *
+	 * @return  bool
+	 */
 	public function isBlogPage()
 	{
 		return Mage::helper('wordpress')->getWpOption('show_on_front') == 'page'

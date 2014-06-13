@@ -8,6 +8,14 @@
 
 class Fishpig_Wordpress_Model_Resource_Term extends Fishpig_Wordpress_Model_Resource_Abstract
 {
+	/**
+	 * Cache for term URI's
+	 * sorted by taxonomoy
+	 *
+	 * @var array
+	 */
+	static $_uriCache = array();
+	
 	public function _construct()
 	{
 		$this->_init('wordpress/term', 'term_id');
@@ -86,5 +94,69 @@ class Fishpig_Wordpress_Model_Resource_Term extends Fishpig_Wordpress_Model_Reso
 		$object->setData(array())->setId(null);
 
 		return false;
+	}
+	
+	/**
+	 * Retrieve the URI for $term
+	 *
+	 * @param Fishpig_Wordpress_Model_Term $term
+	 * @return false|string
+	 */
+	public function getTermUri(Fishpig_Wordpress_Model_Term $term)
+	{
+		return $this->getUriById($term->getId(), $term->getTaxonomyType());
+	}
+
+	/**
+	 * Retrieve the URI for $term
+	 *
+	 * @param Fishpig_Wordpress_Model_Term $term
+	 * @return false|string
+	 */
+	public function getUriById($termId, $taxonomy)
+	{
+		if (($uris = $this->getUrisByTaxonomy($taxonomy)) !== false) {
+			return isset($uris[$termId])
+				? $uris[$termId]
+				: false;
+		}
+
+		return false;	
+	}
+	
+	/**
+	 * Retrieve an array of URI's for the given taxonomy
+	 *
+	 * @param string $taxonomy
+	 * @return array|false
+	 */
+	public function getUrisByTaxonomy($taxonomy)
+	{
+		if (isset(self::$_uriCache[$taxonomy])) {
+			return self::$_uriCache[$taxonomy];
+		}
+		
+		self::$_uriCache[$taxonomy] = false;
+		
+		$select = $this->_getReadAdapter()
+			->select()
+			->from(array('term' => $this->getMainTable()), array('id' => 'term_id', 'url_key' => 'slug'))
+			->join(
+				array('tax' => $this->getTable('wordpress/term_taxonomy')),
+				$this->_getReadAdapter()->quoteInto("tax.term_id = term.term_id AND tax.taxonomy = ?", $taxonomy),
+				'parent'
+			);
+
+		if ($results = $this->_getReadAdapter()->fetchAll($select)) {
+			if ((bool)Mage::getConfig()->getNode('wordpress/legacy/disable_term_hierarchy')) {
+				foreach($results as $key => $result) {
+					$results[$key]['parent'] = null;
+				}
+			}
+
+			self::$_uriCache[$taxonomy] = Mage::helper('wordpress/router')->generateRoutesFromArray($results);
+		}
+
+		return self::$_uriCache[$taxonomy];
 	}
 }

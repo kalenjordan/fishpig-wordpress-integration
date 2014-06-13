@@ -16,6 +16,31 @@ abstract class Fishpig_Wordpress_Model_Post_Abstract extends Fishpig_Wordpress_M
 	protected $_metaTable = 'wordpress/post_meta';	
 	protected $_metaTableObjectField = 'post_id';
 	
+	static protected $_types = null;
+	
+	static public function getType($type = null)
+	{
+		if (is_null(self::$_types)) {
+			self::$_types = json_decode(json_encode((array)Mage::getConfig()->getNode('wordpress/post/types')), true);
+		}
+		
+		if (!$type) {
+			return self::$_types;
+		}
+		
+		return isset(self::$_types[$type])
+			? self::$_types[$type]
+			: false;
+	}
+	
+	static public function typeExists($type)
+	{
+		$types = self::getType();
+		
+		return isset($types[$type]);
+	}
+
+
 	/**
 	 * Inject string 'Protected: ' on password protected posts
 	 *
@@ -28,18 +53,6 @@ abstract class Fishpig_Wordpress_Model_Post_Abstract extends Fishpig_Wordpress_M
 		}
 	
 		return $this->_getData('post_title');
-	}
-	
-	/**
-	 * Load a page by a URI slug (post_name)
-	 * This is useful for loading pages based on the URL
-	 *
-	 * @param string slug
-	 * @return Fishpig_Wordpress_Model_Post_Abstract
-	 */
-	public function loadBySlug($slug)
-	{
-		return $this->load($slug, 'post_name');
 	}
 	
 	/**
@@ -57,12 +70,12 @@ abstract class Fishpig_Wordpress_Model_Post_Abstract extends Fishpig_Wordpress_M
 	 *
 	 * @return string
 	 */
-	public function getPostContent($context = null)
+	public function getPostContent($context = 'full')
 	{
 		$key = rtrim('filtered_post_content_' . $context, '_');
 		
 		if (!$this->hasData($key)) {
-			$this->setData($key, Mage::helper('wordpress/filter')->applyFilters($this->_getData('post_content'), array('object' => $this, 'context' => $context)));
+			$this->setData($key, Mage::helper('wordpress/filter')->applyFilters($this->_getData('post_content'), $this, $context));
 		}
 		
 		return $this->_getData($key);
@@ -270,5 +283,27 @@ abstract class Fishpig_Wordpress_Model_Post_Abstract extends Fishpig_Wordpress_M
 	protected function _getDefaultPostType()
 	{
 		return 'post';
+	}
+	
+	/**
+	 * Determine whether the post is a sticky post
+	 * This only works if the post collection has been loaded with addStickyPostsToCollection
+	 *
+	 * @return bool
+	 */	
+	public function isSticky()
+	{
+		return $this->_getData('is_sticky');
+	}
+	
+	/**
+	 * Determine whether a post object can be viewed
+	 *
+	 * @return string
+	 */
+	public function canBeViewed()
+	{
+		return $this->isPublished()
+			|| ($this->getPostStatus() === 'private' && Mage::getSingleton('customer/session')->isLoggedIn());
 	}
 }

@@ -21,11 +21,9 @@ class Fishpig_Wordpress_Model_Resource_Post_Tag extends Fishpig_Wordpress_Model_
 	public function getCloudTagIds()
 	{
 		$tags = Mage::getResourceModel('wordpress/post_tag_collection')
-			->addOrderByCount();
-			
-		if ($maxTagsToDisplay = Mage::getStoreConfig('wordpress_blog/tag_cloud/max_tags_to_display')) {
-			$tags->getSelect()->limit($maxTagsToDisplay);
-		}
+			->addOrderByCount()
+			->setPageSize(20)
+			->setCurPage(1);
 		
 		$tags->getSelect()->setPart('columns', array());
 		$tags->getSelect()->columns(array('main_table.term_id'));		

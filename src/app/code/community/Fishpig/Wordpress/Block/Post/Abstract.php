@@ -6,7 +6,7 @@
  * @author      Ben Tideswell <help@fishpig.co.uk>
  */
 
-abstract class Fishpig_Wordpress_Block_Post_Abstract extends Mage_Core_Block_Template
+abstract class Fishpig_Wordpress_Block_Post_Abstract extends Fishpig_Wordpress_Block_Abstract
 {
 	/**
 	 * Retrieve the current post object
@@ -15,11 +15,7 @@ abstract class Fishpig_Wordpress_Block_Post_Abstract extends Mage_Core_Block_Tem
 	 */
 	public function getPost()
 	{
-		if (!$this->hasPost()) {
-			return Mage::registry('wordpress_post');
-		}
-		
-		return $this->_getData('post');
+		return $this->hasPost() ? $this->_getData('post') : Mage::registry('wordpress_post');
 	}
 
 	/**
@@ -29,11 +25,7 @@ abstract class Fishpig_Wordpress_Block_Post_Abstract extends Mage_Core_Block_Tem
 	 */
 	public function getPostId()
 	{
-		if (is_object($this->getPost())) {
-			return $this->getPost()->getId();
-		}
-		
-		return false;
+		return $this->getPost() ? $this->getPost()->getId() : false;
 	}
 	
 	/**
@@ -43,11 +35,8 @@ abstract class Fishpig_Wordpress_Block_Post_Abstract extends Mage_Core_Block_Tem
 	 */
 	protected function canComment()
 	{
-		if ($post = $this->getPost()) {
-			return $post->getCommentStatus() === 'open';
-		}
-		
-		return false;
+		return $this->getPost() 
+			&& $this->getPost()->getCommentStatus() === 'open';
 	}
 	
 	/**
@@ -57,31 +46,8 @@ abstract class Fishpig_Wordpress_Block_Post_Abstract extends Mage_Core_Block_Tem
 	 */
 	public function canDisplayPreviousNextLinks()
 	{
-		if (!$this->hasDisplayPreviousNextLinks()) {
-			$this->setDisplayPreviousNextLinks(Mage::getStoreConfigFlag('wordpress_blog/posts/display_previous_next'));
-		}
-		
-		return $this->_getData('display_previous_next_links');
+		return (bool)$this->_getData('display_previous_next_links');
 	}
-	
-	/**
-	 * Gets the post meta block
-	 *
-	 * @return Mage_Core_Block_Template
-	 */
-	public function getMetaBlock()
-	{
-		if (!$this->getChild('post_meta')) {
-			$renderBlock = $this->getLayout()->createBlock('wordpress/post_meta');
-
-			$renderBlock->setTemplate('wordpress/post/meta.phtml');
-				
-			$this->setChild('post_meta', $renderBlock);
-		}
-		
-		return $this->getChild('post_meta');
-	}
-	
 	
 	/**
 	 * Retrieve the HTML for the password protect form
@@ -89,14 +55,18 @@ abstract class Fishpig_Wordpress_Block_Post_Abstract extends Mage_Core_Block_Tem
 	 * @param Fishpig_Wordpress_Model_Post $post
 	 * @return string
 	 */
-	public function getPasswordProtectHtml($post)
+	public function getPasswordProtectHtml($post = null)
 	{
-		$block = $this->getLayout()
-			->createBlock('core/template')
-			->setTemplate('wordpress/post/protected.phtml')
-			->setPost($post);
-					
-		return $block->toHtml();
+		if (is_null($post)) {
+			$post = $this->getPost();
+		}
+
+		return $this->getLayout()
+			->createBlock('wordpress/template')
+			->setTemplate('wordpress/protected.phtml')
+			->setEntityType('post')
+			->setPost($post)
+			->toHtml();
 	}
 	
 	/**
@@ -107,5 +77,107 @@ abstract class Fishpig_Wordpress_Block_Post_Abstract extends Mage_Core_Block_Tem
 	public function displayExcerptInFeed()
 	{
 		return Mage::helper('wordpress')->getWpOption('rss_use_excerpt') == '1';
+	}
+	
+	/**
+	 * If post view, setup the post with child blocks
+	 *
+	 * @return $this
+	 */
+	protected function _beforeToHtml()
+	{
+		if ($this->getPost() && $this->_getBlockForPostPrepare() !== false) {
+			$this->preparePost($this->getPost());
+		}
+		
+		return parent::_beforeToHtml();
+	}
+	
+	/**
+	 * Set the post as the current post in all child blocks
+	 *
+	 * @param Fishpig_Wordpress_Model_Post_Abstract $post
+	 * @return $this
+	 */
+	public function preparePost(Fishpig_Wordpress_Model_Post_Abstract $post)
+	{	
+		if (($rootBlock = $this->_getBlockForPostPrepare()) !== false) {
+			foreach($rootBlock->getChild('') as $alias => $block) {
+				$block->setPost($post);
+			
+				foreach($block->getChild('') as $calias => $cblock) {
+					$cblock->setPost($post);
+				}
+			}
+		}
+		
+		return $this;
+	}
+	
+	/**
+	 * Retrieve the block used to prepare the post
+	 * This should be the root post block
+	 *
+	 * @return Fishpig_Wordpress_Block_Post_Abstract
+	 */
+	protected function _getBlockForPostPrepare()
+	{
+		return $this;
+	}
+	
+	/**
+	 * Retrieve the after_post_content HTML
+	 *
+	 * @return string
+	 */
+	public function getAfterPostContentHtml()
+	{
+		return $this->_getChildTextList('after_post_content');
+	}
+	
+	/**
+	 * Retrieve the before_post_content HTML
+	 *
+	 * @return string
+	 */
+	public function getBeforePostContentHtml()
+	{
+		return $this->_getChildTextList('before_post_content');
+	}
+	
+	/**
+	 * Validate and retrieve a child core/text_list HTML
+	 *
+	 * @param string $name
+	 * @return string
+	 */
+	protected function _getChildTextList($name)
+	{
+		if (($block = $this->_getBlockForPostPrepare()) !== false) {
+			if (($child = $block->getChild($name)) !== false) {
+				if ($child->getChild('')) {
+					return $child->toHtml();
+				}
+			}
+		}
+		
+		return '';
+	}
+	
+	/**
+	 * Get the Meta block
+	 *
+	 * @return Fishpig_Wordpress_Block_Post_Meta
+	 */
+	public function getMetaBlock()
+	{
+		if (!$this->hasMetaBlock()) {
+			$this->setMetaBlock(
+				$this->getLayout()->createBlock('wordpress/post_meta')
+					->setTemplate('wordpress/post/meta.phtml')
+			);
+		}
+		
+		return $this->_getData('meta_block');
 	}
 }

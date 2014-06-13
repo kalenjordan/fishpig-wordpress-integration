@@ -1,29 +1,88 @@
 <?xml version="1.0"?>
 <layout>
-
+	<!--
+	/**
+	 * Default for all Adminhtml pages
+	 */
+	 -->
 	<default>
 		<reference name="before_body_end">
-			<block type="adminhtml/template" name="wordpress.adminLinks" template="wordpress/admin-links-js.phtml"/>
+			<block type="core/text" name="wordpress.adminLinks">
+				<action method="setText">
+					<text>
+						<![CDATA[
+						<script type="text/javascript">
+							document.observe('dom:loaded', function() {$('nav').select('li.level1').each(function(l, ind) {
+								if (l.innerHTML.indexOf('WordPress') >= 0) {
+									l.select('a').first().writeAttribute('target', '_blank');
+								}});
+							});
+						</script>
+						]]>
+					</text>
+				</action>
+			</block>
+			<block type="wordpress/adminhtml_update" name="wp.update" />
 		</reference>
 	</default>
-
-	<adminhtml_wordpress_autologin>
-		<reference name="left">
-			<block type="wordpress/adminhtml_autologin_edit_tabs" name="wordpress.autologin.tabs"/>
-		</reference>
-		<reference name="content">
-			<block type="wordpress/adminhtml_autologin_edit" name="wordpress.autologin" />
-		</reference>
-	</adminhtml_wordpress_autologin>
-	
+	<!--
+	/**
+	 * System Config
+	 */
+	 -->
 	<adminhtml_system_config_edit>
 		<reference name="content">
-			<block type="wordpress/adminhtml_system_config_wrapper" name="wordpress.test.results"  before="-" template="wordpress/config/test/results.phtml">
-				<block type="wordpress/adminhtml_system_config_test_results_grid" name="wp_test_results" as="wp_test_results"/>
+			<block type="core/template" name="wp.integration.tests"  before="-" template="wordpress/integration-tests.phtml">
+				<block type="wordpress/adminhtml_extend" name="fishpig.extend" as="extend">
+					<action method="setModule"><module>Fishpig_Wordpress</module></action>
+					<action method="setMedium"><medium>System Configuration</medium></action>
+					<action method="setLimit"><limit>2</limit></action>
+					<action method="setPreferred">
+						<pref><Fishpig_Wordpress_Addon_Root /><Fishpig_Wordpress_Addon_CS /><Fishpig_Wordpress_Addon_IntegratedSearch/><Fishpig_Wordpress_Addon_Facebook /></pref>
+					</action>
+				</block>
+			</block>
+		</reference>
+		<reference name="before_body_end">
+			<block type="core/text" name="wordpress.js.setup">
+				<action method="setText">
+					<text>
+						<![CDATA[
+							<script type="text/javascript">
+								(function() {
+									var itr = $('fp-integration-test-results');
+									
+									if (itr) {
+										itr.next('.content-header').remove();
+										
+										Validation.add('validate-blog-route','Please use only letters (a-z), numbers (0-9) or hyphen(-) in this field.', function(v){
+											return Validation.get('IsEmpty').test(v) ||  /^[a-z]+[a-z0-9-\/]+$/.test(v)
+										});
+										
+										var cptRow = $('row_wordpress_custom_post_types_types');
+										
+										if (cptRow) {
+											cptRow.select('td.value').invoke('writeAttribute', 'colspan', 4).invoke('setStyle', {'width': '100%'});
+											cptRow.select('td.label').invoke('remove');
+											cptRow.select('td.scope-label').invoke('remove');
+											cptRow.select('td').last().remove();
+											cptRow.select('p.note').invoke('setStyle', {'width': 'auto'});
+										}
+									}
+								})();
+							</script>
+						]]>
+					</text>
+				</action>
 			</block>
 		</reference>
 	</adminhtml_system_config_edit>
 
+	<!--
+	/**
+	 * Editing a product
+	 */
+	 -->
 	<adminhtml_catalog_product_edit>
 		<reference name="product_tabs">
 			<action method="addTab">
@@ -34,7 +93,6 @@
 			</action>
 		</reference>	
 	</adminhtml_catalog_product_edit>
-	
 	<adminhtml_wordpress_association_product_post>
 		<block type="core/text_list" name="root" output="toHtml">
 			<block type="wordpress/adminhtml_associations_product_post" name="wp_assoc_grid" />
@@ -53,13 +111,16 @@
             </block>
 		</block>
 	</adminhtml_wordpress_association_product_post>
-	
 	<adminhtml_wordpress_association_product_post_grid>
 		<block type="core/text_list" name="root" output="toHtml">
 			<block type="wordpress/adminhtml_associations_product_post" name="wp_assoc_grid" />
 		</block>
 	</adminhtml_wordpress_association_product_post_grid>
-	
+	<!--
+	/**
+	 * Editing a category
+	 */
+	 -->
 	<adminhtml_wordpress_association_product_category>
 		<block type="core/text_list" name="root" output="toHtml">
 			<block type="wordpress/adminhtml_associations_product_category" name="wp_assoc_grid" />
@@ -78,13 +139,11 @@
             </block>
 		</block>
 	</adminhtml_wordpress_association_product_category>
-	
 	<adminhtml_wordpress_association_product_category_grid>
 		<block type="core/text_list" name="root" output="toHtml">
 			<block type="wordpress/adminhtml_associations_product_category" name="wp_assoc_grid" />
 		</block>
 	</adminhtml_wordpress_association_product_category_grid>
-	
 	<adminhtml_catalog_category_edit>
 		<reference name="tabs">
 			<action method="addTab">
@@ -97,7 +156,6 @@
 			</action>
 		</reference>	
 	</adminhtml_catalog_category_edit>
-	
 	<adminhtml_wordpress_association_category_post>
 		<block type="core/text_list" name="root" output="toHtml">
 			<block type="wordpress/adminhtml_associations_category_post" name="wp_assoc_grid" />
@@ -173,13 +231,11 @@
             </block>
 		</block>
 	</adminhtml_wordpress_association_cms_page_post>
-	
 	<adminhtml_wordpress_association_cms_page_post_grid>
 		<block type="core/text_list" name="root" output="toHtml">
 			<block type="wordpress/adminhtml_associations_cms_page_post" name="wp_assoc_grid" />
 		</block>
 	</adminhtml_wordpress_association_cms_page_post_grid>
-
 	<adminhtml_wordpress_association_cms_page_category>
 		<block type="core/text_list" name="root" output="toHtml">
 			<block type="wordpress/adminhtml_associations_cms_page_category" name="wp_assoc_grid" />
@@ -198,17 +254,9 @@
             </block>
 		</block>
 	</adminhtml_wordpress_association_cms_page_category>
-	
 	<adminhtml_wordpress_association_cms_page_category_grid>
 		<block type="core/text_list" name="root" output="toHtml">
 			<block type="wordpress/adminhtml_associations_cms_page_category" name="wp_assoc_grid" />
 		</block>
 	</adminhtml_wordpress_association_cms_page_category_grid>
-
-	<adminhtml_wordpress_cpt_upgrade>
-		<reference name="content">
-			<block type="adminhtml/template" name="wp.cpt.upgrade" template="wordpress/cpt/upgrade.phtml" />
-		</reference>
-	</adminhtml_wordpress_cpt_upgrade>
-	
 </layout>

@@ -8,13 +8,10 @@
 ?>
 <?php $posts = $this->getPosts() ?>
 <?php if (count($posts) > 0): ?>
-	<?php if ($this->helper('wordpress/plugin_shareThis')->canDisplayOnPost()): ?>
-		<?php echo $this->helper('wordpress/plugin_shareThis')->getJavascriptHtml() ?>
-	<?php endif; ?>
 	<div class="post-list">
 		<ul id="post-list">
 			<?php foreach($posts as $post): ?>
-				<li class="item">
+				<li class="item<?php if ($post->isSticky()): ?> featured is-sticky<?php endif; ?>">
 					<?php echo $this->getPostRenderer($post)->toHtml() ?>
 				</li>
 			<?php endforeach; ?>

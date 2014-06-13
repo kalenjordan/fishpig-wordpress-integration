@@ -203,6 +203,9 @@ abstract class Fishpig_Wordpress_Helper_Plugin_Seo_Abstract extends Fishpig_Word
 	 */
 	protected function _redirect($path)
 	{
+		header('Location: ' . Mage::getUrl('', array('_direct' => $path)));;
+		exit;
+		
 		$exception = new Mage_Core_Controller_Varien_Exception();
 
 		throw $exception->prepareRedirect($path);

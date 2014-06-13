@@ -31,6 +31,7 @@ class Fishpig_Wordpress_Model_Menu_Item extends Fishpig_Wordpress_Model_Post_Abs
 	*/
 	protected $_eventObject = 'menu_item';
 
+	
 	public function _construct()
 	{
 		$this->_init('wordpress/menu_item');
@@ -83,14 +84,25 @@ class Fishpig_Wordpress_Model_Menu_Item extends Fishpig_Wordpress_Model_Post_Abs
 	 */
 	public function getObject()
 	{
+
+		$this->setObject(false);
+
 		if (!$this->isCustomLink()) {
-			$this->setObject(false);
-			
 			if ($this->getObjectType()) {
-				$object = Mage::getModel('wordpress/' . $this->getObjectType())->load($this->getMetaValue('_menu_item_object_id'));
+				if ($menuObjectId = $this->getMetaValue('_menu_item_object_id')) {
+					if ($this->isPostTypeLink() && $this->getObjectType() !== 'page')  {
+						$object = Mage::getModel('wordpress/post')->setPostType($this->getObjectType());
+					}
+					else if ($this->isTaxonomyLink() && $this->getObjectType() !== 'post_category') {
+						$object = Mage::getModel('wordpress/term')->setTaxonomy($this->getObjectType());
+					}
+					else {
+						$object = Mage::getModel('wordpress/' . $this->getObjectType());
+					}
 				
-				if ($object->getId()) {
-					$this->setObject($object);
+					if ($object && $object->setSkipObjectCache(true)->load($menuObjectId)->getId()) {
+						$this->setObject($object);
+					}
 				}
 			}
 		}
@@ -139,7 +151,12 @@ class Fishpig_Wordpress_Model_Menu_Item extends Fishpig_Wordpress_Model_Post_Abs
 			return $this->getMetaValue('_menu_item_url');
 		}
 		else if ($this->getObject() !== false) {
-			return $this->getObject()->getUrl();
+			if (in_array($this->getObjectType(), array('page', 'post'))) {
+				return $this->getObject()->getPermalink();
+			}
+			else {
+				return $this->getObject()->getUrl();
+			}
 		}
 	}
 	
@@ -150,7 +167,7 @@ class Fishpig_Wordpress_Model_Menu_Item extends Fishpig_Wordpress_Model_Post_Abs
 	 */
 	public function getLabel()
 	{
-		if ($this->isCustomLink()) {
+		if ($this->getPostTitle() || $this->isCustomLink()) {
 			return $this->getPostTitle();
 		}
 		else if ($this->isPostTypeLink() && $this->getObject()) {
@@ -168,7 +185,13 @@ class Fishpig_Wordpress_Model_Menu_Item extends Fishpig_Wordpress_Model_Post_Abs
 	 */
 	public function isItemActive()
 	{
-		return false;
+		$currentUrl = Mage::getUrl('*/*/*', array('_current' => true, '_use_rewrite' => true));
+		
+		if (strpos($currentUrl, '?') !== false) {
+			$currentUrl = substr($currentUrl, 0, strpos($currentUrl, '?'));
+		}
+		
+		return $currentUrl === $this->getUrl();
 	}
 	
 	/**

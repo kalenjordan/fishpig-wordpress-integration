@@ -9,6 +9,13 @@
 class Fishpig_Wordpress_Post_CategoryController extends Fishpig_Wordpress_Controller_Abstract
 {
 	/**
+	 * Set the feed blocks
+	 *
+	 * @var string
+	 */
+	protected $_feedBlock = 'category_view';
+	
+	/**
 	 * Used to do things en-masse
 	 * eg. include canonical URL
 	 *
@@ -46,35 +53,35 @@ class Fishpig_Wordpress_Post_CategoryController extends Fishpig_Wordpress_Contro
 		$category = Mage::registry('wordpress_category');
 		
 		$this->_addCustomLayoutHandles(array(
-			'wordpress_category_index', 
+			'wordpress_post_category_view',
 			'wordpress_category_'.$category->getId(),
-			'WORDPRESS_CATEGORY_'.$category->getId(),
+			'wordpress_post_list',
 			'wordpress_term',
 		));
 			
 		$this->_initLayout();
 		
-		$this->_rootTemplates[] = 'template_post_list';
-		
-		if (($tree = $category->getTermTree()) !== false) {
-			$branches = count($tree);
-			
-			foreach($tree as $branch) {
-				if (--$branches >= 1) {
-					$this->addCrumb('category_' . $branch->getId(), array('link' => $branch->getUrl(), 'label' => $branch->getName()));
-				}
-				else {
-					$this->addCrumb('category_' . $branch->getId(), array('label' => $branch->getName()));
-				}
+		$this->_rootTemplates[] = 'post_list';
 
-				$this->_title($branch->getName());
-			}
-		}
+		$tree = array($category);
+		$buffer = $category;
 		
+		while(($buffer = $buffer->getParentCategory()) !== false) {
+			array_unshift($tree, $buffer);
+		}
+
+		while(($branch = array_shift($tree)) !== null) {
+			$this->addCrumb('category_' . $branch->getId(), array(
+				'link' => ($tree ? $branch->getUrl() : null), 
+				'label' => $branch->getName())
+			);
+
+			$this->_title($branch->getName());
+		}
+
 		$this->renderLayout();
 	}
 
-	
 	/**
 	 * Load the category based on the slug stored in the param 'category'
 	 *
@@ -82,20 +89,11 @@ class Fishpig_Wordpress_Post_CategoryController extends Fishpig_Wordpress_Contro
 	 */
 	protected function _initPostCategory()
 	{
-		$helper = Mage::helper('wordpress/router');
-		
-		$uri = $helper->trimCategoryBaseFromUri($helper->getBlogUri());
-
 		if (($category = Mage::registry('wordpress_category')) !== null) {
 			return $category;
 		}
-
-		if (strpos($uri, '/') !== false) {
-			$category = Mage::getModel('wordpress/post_category')->loadBySlugs(explode('/', $uri));
-		}
-		else {
-			$category = Mage::getModel('wordpress/post_category')->loadBySlug($uri);
-		}
+		
+		$category = Mage::getModel('wordpress/post_category')->load($this->getRequest()->getParam('id'));
 	
 		if ($category->getId()) {
 			Mage::register('wordpress_category', $category);
@@ -104,16 +102,5 @@ class Fishpig_Wordpress_Post_CategoryController extends Fishpig_Wordpress_Contro
 		}
 
 		return false;
-	}
-	
-	/**
-	 * Display the comment feed
-	 *
-	 */
-	public function feedAction()
-	{
-		$this->getResponse()
-			->setHeader('Content-Type', 'text/xml; charset=' . Mage::helper('wordpress')->getWpOption('blog_charset'), true)
-			->setBody($this->getLayout()->createBlock('wordpress/feed_category')->setCategory(Mage::registry('wordpress_category'))->toHtml());
 	}
 }

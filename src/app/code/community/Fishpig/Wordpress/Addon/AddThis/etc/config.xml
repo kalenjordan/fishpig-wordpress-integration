@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<config>
+    <modules>
+		<Fishpig_Wordpress_Addon_AddThis>
+			<version>1.0.1.2</version>
+			<fishpig>
+				<id>addthis</id>
+				<name>Add This</name>
+				<is_core>1</is_core>
+			</fishpig>
+		</Fishpig_Wordpress_Addon_AddThis>
+    </modules>
+    <global>
+    	<blocks>
+	    	<wp_addon_addthis>
+	    		<class>Fishpig_Wordpress_Addon_AddThis_Block</class>
+	    	</wp_addon_addthis>
+    	</blocks>
+    	<helpers>
+	    	<wp_addon_addthis>
+	    		<class>Fishpig_Wordpress_Addon_AddThis_Helper</class>
+	    	</wp_addon_addthis>
+    	</helpers>
+    </global>
+    <!--
+    <wordpress>
+    	<sidebar>
+    		<widgets>
+    			<addthis-widget>wp_addon_addthis/sidebar_widget_share</addthis-widget>
+    		</widgets>
+    	</sidebar>
+    </wordpress>
+    -->
+</config>

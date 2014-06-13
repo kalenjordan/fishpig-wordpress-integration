@@ -10,15 +10,13 @@
 <?php if ($post): ?>
 	<?php $helper = $this->helper('wordpress') ?>
 	<?php $author = $post->getAuthor() ?>
-	<?php if ($this->helper('wordpress/plugin_shareThis')->canDisplayOnPost()): ?>
-		<?php echo $this->helper('wordpress/plugin_shareThis')->getJavascriptHtml() ?>
-	<?php endif; ?>
 	<div class="page-title post-title">
 		<h1><?php echo $this->escapeHtml($post->getPostTitle()) ?></h1>
 	</div>
 	<div class="post-view">
-		<p class="post-date when"><?php echo $this->__('This entry was posted on %s<span class=\"by-author\"> by %s</span>.', $post->getPostDate(), $post->getAuthor()->getDisplayName()) ?></p>
-		<div class="post-entry entry std<?php if ($post->getFeaturedImage): ?> post-entry-with-image<?php endif; ?>">
+		<p class="post-date when"><?php echo stripslashes($this->__('This entry was posted on %s<span class=\"by-author\"> by %s</span>.', $post->getPostDate(), $post->getAuthor()->getDisplayName())) ?></p>
+		<?php echo $this->getBeforePostContentHtml() ?>
+		<div class="post-entry entry std<?php if ($post->getFeaturedImage()): ?> post-entry-with-image<?php endif; ?>">
 			<?php if ($post->isViewableForVisitor()): ?>
 				<?php if ($featuredImage = $post->getFeaturedImage()): ?>
 					<div class="featured-image left"><img src="<?php echo $featuredImage->getAvailableImage() ?>" alt="<?php echo $this->escapeHtml($post->getPostTitle()) ?>"/></div>
@@ -28,11 +26,7 @@
 				<?php echo $this->getPasswordProtectHtml() ?>
 			<?php endif; ?>
 		</div>
-		<?php echo $this->getMetaBlock()->setPost($post)->toHtml() ?>
-		<?php if ($this->helper('wordpress/plugin_shareThis')->canDisplayOnPost()): ?>
-				<div class="sharethis-icons" id="sharethis-icons-<?php echo $post->getId() ?>"><?php echo $this->helper('wordpress/plugin_shareThis')->getIcons($post) ?></div>
-		<?php endif; ?>
-		<?php echo $this->getChildHtml('related_posts') ?>
+		<?php echo $this->getAfterPostContentHtml() ?>
 		<?php echo $this->getCommentsHtml() ?>
 	</div>
 <?php endif; ?>

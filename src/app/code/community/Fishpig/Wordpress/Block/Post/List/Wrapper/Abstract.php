@@ -6,42 +6,8 @@
  * @author      Ben Tideswell <help@fishpig.co.uk>
  */
 
-abstract class Fishpig_Wordpress_Block_Post_List_Wrapper_Abstract extends Mage_Core_Block_Template
-{
-	/**
-	 * Cache for post collection
-	 *
-	 * @var Fishpig_Wordpress_Model_Mysql4_Post_Collection
-	 */
-	protected $_postCollection = null;
-
-	/**
-	 * Cache for the post list block
-	 *
-	 * @var Fishpig_Wordpress_Block_Post_List
-	 */
-	protected $_postListBlock = null;
-	
-	/**
-	 * Block name for the post list block
-	 *
-	 * @var string
-	 */
-	protected $_postListBlockName = 'wordpress_post_list';	
-	
-	/**
-	  * Constructor
-	  * This sets the default template for listing the posts
-	  * This is not the template for this (wrapper)
-	  *
-	  */
-	public function __construct()
-	{
-		parent::__construct();
-		// Set the default template to list the posts
-		$this->setPostListTemplate('wordpress/post/list.phtml');
-	}
-	
+abstract class Fishpig_Wordpress_Block_Post_List_Wrapper_Abstract extends Fishpig_Wordpress_Block_Abstract
+{	
 	/**
 	 * Returns the collection of posts
 	 *
@@ -49,18 +15,20 @@ abstract class Fishpig_Wordpress_Block_Post_List_Wrapper_Abstract extends Mage_C
 	 */
 	public function getPostCollection()
 	{
-		if (is_null($this->_postCollection)) {
-			if (($collection = $this->_getPostCollection()) !== false) {
-				$collection->addStatusFilter('publish')->addOrder('post_date', 'desc');
-				
-				$this->_postCollection = $collection;
-				
-				Mage::dispatchEvent('wordpress_post_collection_before_load', array('block' => $this, 'collection' => $this->_postCollection));
-				Mage::dispatchEvent($this->_getPostCollectionEventName(), array('block' => $this, 'collection' => $this->_postCollection));
-			}
+		if (!$this->hasPostCollection()  && ($collection = $this->_getPostCollection()) !== false) {
+			$collection->addIsViewableFilter()
+				->addOrder('post_date', 'desc');
+			
+			$this->setPostCollection($collection);
+			
+			$collection->setFlag('after_load_event_name', $this->_getPostCollectionEventName() . '_after_load');
+			$collection->setFlag('after_load_event_block', $this);
+
+			Mage::dispatchEvent('wordpress_post_collection_before_load', array('block' => $this, 'collection' => $collection));
+			Mage::dispatchEvent($this->_getPostCollectionEventName() . '_before_load', array('block' => $this, 'collection' => $collection));
 		}
 
-		return $this->_postCollection;
+		return $this->_getData('post_collection');
 	}
 	
 	/**
@@ -72,7 +40,7 @@ abstract class Fishpig_Wordpress_Block_Post_List_Wrapper_Abstract extends Mage_C
 	{
 		$class = get_class($this);
 		
-		return 'wordpress_block_' . strtolower(substr($class, strpos($class, 'Block')+6)) . '_post_collection_before_load';
+		return 'wordpress_block_' . strtolower(substr($class, strpos($class, 'Block')+6)) . '_post_collection';
 	}
 	
 	/**
@@ -92,39 +60,28 @@ abstract class Fishpig_Wordpress_Block_Post_List_Wrapper_Abstract extends Mage_C
 	 */
 	public function getPostListHtml()
 	{
-		return $this->getPostListBlock()->toHtml();
+		if (($postListBlock = $this->getPostListBlock()) !== false) {
+			return $postListBlock->toHtml();
+		}
+		
+		return '';
 	}
 	
 	/**
 	 * Gets the post list block
 	 *
-	 * @return Fishpig_Wordpress_Block_Post_List
+	 * @return Fishpig_Wordpress_Block_Post_List|false
 	 */
 	public function getPostListBlock()
 	{
-		if (is_null($this->_postListBlock)) {
-			if (($block = $this->getChild($this->_postListBlockName)) === false) {
-				$block = $this->getLayout()
-					->createBlock('wordpress/post_list', $this->_postListBlockName . rand(1111, 9999))
-					->setTemplate($this->getPostListTemplate());
+		if (($postListBlock = $this->getChild('post_list')) !== false) {
+			if (!$postListBlock->getWrapperBlock()) {
+				$postListBlock->setWrapperBlock($this);
 			}
-
-			$block->setWrapperBlock($this);
-
-			$this->_postListBlock = $block;
+			
+			return $postListBlock;
 		}
 		
-		return $this->_postListBlock;
-	}
-	
-	/**
-	 * Sets the name of the child block that contains the post list
-	 *
-	 * @param string $blockName
-	 */
-	public function setPostListBlockName($blockName)
-	{
-		$this->_postListBlockName = $blockName;
-		return $this;
+		return false;
 	}
 }

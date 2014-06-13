@@ -9,6 +9,13 @@
 class Fishpig_Wordpress_Post_TagController extends Fishpig_Wordpress_Controller_Abstract
 {
 	/**
+	 * Set the feed blocks
+	 *
+	 * @var string
+	 */
+	protected $_feedBlock = 'tag_view';
+
+	/**
 	 * Used to do things en-masse
 	 * eg. include canonical URL
 	 *
@@ -32,13 +39,14 @@ class Fishpig_Wordpress_Post_TagController extends Fishpig_Wordpress_Controller_
 		$tag = Mage::registry('wordpress_post_tag');
 		
 		$this->_addCustomLayoutHandles(array(
-			'wordpress_tag_index',
+			'wordpress_post_tag_view',
 			'wordpress_term',
+			'wordpress_post_list',
 		));
 			
 		$this->_initLayout();
 		
-		$this->_rootTemplates[] = 'template_post_list';
+		$this->_rootTemplates[] = 'post_list';
 
 		$this->_title(ucwords($tag->getName()));
 
@@ -58,23 +66,13 @@ class Fishpig_Wordpress_Post_TagController extends Fishpig_Wordpress_Controller_
 		if (($tag = Mage::registry('wordpress_post_tag')) !== null) {
 			return $tag;
 		}
-		
-		$uri = $this->getRouterHelper()->getBlogUri();
-		$base = $this->getRouterHelper()->getTagBase();
-		
-		if ($base) {
-			if (substr($uri, 0, strlen($base)) == $base) {
-				$uri = trim(substr($uri, strlen($base)), '/');
-			}
-		}
 
-		$uri = urlencode($uri);
+		$postTag = Mage::getModel('wordpress/post_tag')->load($this->getRequest()->getParam('tag'), 'slug');
 		
-		if ($postTag = Mage::getModel('wordpress/post_tag')->load($uri, 'slug')) {
-			if ($postTag->getId() > 0) {
-				Mage::register('wordpress_post_tag', $postTag);
-				return $postTag;
-			}
+		if ($postTag->getId() > 0) {
+			Mage::register('wordpress_post_tag', $postTag);
+
+			return $postTag;
 		}
 
 		return false;

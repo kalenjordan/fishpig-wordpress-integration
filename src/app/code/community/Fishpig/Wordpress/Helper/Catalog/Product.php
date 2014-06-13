@@ -22,7 +22,7 @@ class Fishpig_Wordpress_Helper_Catalog_Product extends Fishpig_Wordpress_Helper_
 			$categoryIds = $this->getAssociatedCategoryIds($product);
 
 			if (count($postIds) > 0 || count($categoryIds) > 0) {
-				$collection = Mage::getResourceModel('wordpress/post_collection')->addIsPublishedFilter();
+				$collection = Mage::getResourceModel('wordpress/post_collection')->addIsViewableFilter();
 				$collection->getSelect()->distinct();
 				$collection->addCategoryAndPostIdFilter($postIds, $categoryIds);
 				$collection->setOrderByPostDate();

@@ -14,15 +14,11 @@ class Fishpig_Wordpress_Model_Resource_Post_Comment_Collection extends Fishpig_W
 	}
 
 	/**
-	 * Perform the joins necessary to create a full category record
+	 * Order the comments by date
+	 *
+	 * @param string $dir = null
+	 * @return $this
 	 */
-	protected function _initSelect()
-	{
-		$select = $this->getSelect()
-			->distinct()
-			->from(array('main_table' => $this->getResource()->getMainTable()));	
-	}	
-
 	public function addOrderByDate($dir = null)
 	{
 		if (is_null($dir)) {
@@ -36,9 +32,21 @@ class Fishpig_Wordpress_Model_Resource_Post_Comment_Collection extends Fishpig_W
 	}
 	
 	/**
+	 * Add parent comment filter
+	 *
+	 * @param int $parentId = 0
+	 * @return $this
+	 */
+	public function addParentCommentFilter($parentId = 0)
+	{
+		return $this->addFieldToFilter('comment_parent', $parentId);
+	}
+	
+	/**
 	  * Filters the collection of comments
 	  * so only comments for a certain post are returned
 	  *
+	  * @return $this
 	  */
 	public function addPostIdFilter($postId)
 	{
@@ -49,6 +57,7 @@ class Fishpig_Wordpress_Model_Resource_Post_Comment_Collection extends Fishpig_W
 	 * Filter the collection by a user's ID
 	 *
 	 * @param int $userId
+	 * @return $this
 	 */
 	public function addUserIdFilter($userId)
 	{
@@ -56,9 +65,10 @@ class Fishpig_Wordpress_Model_Resource_Post_Comment_Collection extends Fishpig_W
 	}
 	
 	/**
-	 * Filter the collection by the comment_author_email column
-	 *
-	 * @param string $email
+	  * Filter the collection by the comment_author_email column
+	  *
+	  * @param string $email
+	  * @return $this
 	 */
 	public function addCommentAuthorEmailFilter($email)
 	{
@@ -66,17 +76,12 @@ class Fishpig_Wordpress_Model_Resource_Post_Comment_Collection extends Fishpig_W
 	}
 	
 	/**
-	 * Filters the collection so only approved comments are returned
-	 *
+	  * Filters the collection so only approved comments are returned
+	  *
+	  * @return $this
 	 */
-	public function addCommentApprovedFilter($status = 1, $userEmail = null)
+	public function addCommentApprovedFilter($status = 1)
 	{
-		if (is_null($userEmail) || $status !== 1) {
-			return $this->addFieldToFilter('comment_approved', $status);
-		}
-
-		$this->getSelect()->where('comment_approved = ' .(int)$status . " OR (comment_approved = '0' AND comment_author_email = ?)", $userEmail);
-
-		return $this;
+		return $this->addFieldToFilter('comment_approved', $status);
 	}
 }

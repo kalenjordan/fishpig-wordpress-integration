@@ -26,7 +26,9 @@ class Fishpig_Wordpress_Block_Page_View_Comment_Form extends Fishpig_Wordpress_B
 	 */	
 	public function getPage()
 	{
-		return Mage::registry('wordpress_page');
+		return $this->_getData('page')
+			? $this->_getData('page') 
+			: Mage::registry('wordpress_page');
 	}
 	
 	/**
@@ -36,6 +38,6 @@ class Fishpig_Wordpress_Block_Page_View_Comment_Form extends Fishpig_Wordpress_B
 	 */
 	public function getCommentFormAction()
 	{
-		return $this->helper('wordpress')->getUrl('post-comment') . '?is_page=1';
+		return parent::getCommentFormAction() . '?is_page=1';
 	}
 }

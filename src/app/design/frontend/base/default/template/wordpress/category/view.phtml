@@ -6,7 +6,7 @@
  * @author      Ben Tideswell <help@fishpig.co.uk>
  */
 ?>
-<?php $_category = $this->getCurrentCategory() ?>
+<?php $_category = $this->getCategory() ?>
 <?php if ($_category): ?>
 	<div class="page-title">
 		<h1><?php echo $this->escapeHtml($_category->getName()) ?></h1>
